@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Word Vault</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="ambientGlow"></div>
+  <header class="vaultTopbar">
+    <div class="topLeftCluster">
+      <button class="iconBtn" id="menuBtn" title="Menu">☰</button>
+      <button class="roomPlate" id="roomPlate" title="Copy room code">
+        <span>Room Code</span>
+        <strong id="topRoomCode">----</strong>
+        <em>⧉</em>
+      </button>
+    </div>
+
+    <div class="brandPlate">
+      <span class="brandWord">Word</span>
+      <span class="brandSeal">⌕</span>
+      <span class="brandWord">Vault</span>
+    </div>
+
+    <div class="topRightCluster">
+      <button class="circleBtn" id="musicBtn" title="Toggle sound">♪</button>
+      <button class="circleBtn" id="rulesBtn" title="Rules">?</button>
+      <button class="circleBtn" id="leaveBtn" title="Leave room">↩</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="home" class="homePanel">
+      <div class="heroCard">
+        <div class="tinyCaps">Online multiplayer word deduction</div>
+        <h1>Enter the Vault</h1>
+        <p>Create a room, invite friends, build a hidden word tray, and uncover each other’s secrets with activity cards.</p>
+
+        <label>Your name</label>
+        <input id="nameInput" maxlength="24" placeholder="Your name" />
+
+        <div class="buttonRow">
+          <button id="createBtn" class="primaryGameBtn">Create Room</button>
+        </div>
+
+        <div class="divider"><span>or join</span></div>
+
+        <label>Room code</label>
+        <input id="codeInput" maxlength="4" placeholder="ABCD" />
+
+        <div class="buttonRow">
+          <button id="joinBtn" class="secondaryGameBtn">Join Room</button>
+        </div>
+
+        <div id="resumeWrap"></div>
+      </div>
+
+      <div class="featureBoard">
+        <h2>What’s inside</h2>
+        <div class="featureGrid">
+          <div><strong>Live rooms</strong><span>Play from different devices.</span></div>
+          <div><strong>Secret trays</strong><span>12-slot hidden words with dots.</span></div>
+          <div><strong>Activity cards</strong><span>Multipliers, extra turns, exposes.</span></div>
+          <div><strong>Auto scoring</strong><span>No paper bookkeeping.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="lobby" class="screen hidden"></section>
+    <section id="setup" class="screen hidden"></section>
+    <section id="game" class="gameScreen hidden"></section>
+    <section id="end" class="screen hidden"></section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <dialog id="rulesDialog">
+    <h2>Rules Summary</h2>
+    <p>Each player creates a 12-space tray using a secret word plus dots before and/or after it. Dots hide the true word length.</p>
+    <ul>
+      <li>Slots 1–4 are worth 5 points each.</li>
+      <li>Slots 5–8 are worth 10 points each.</li>
+      <li>Slots 9–12 are worth 15 points each.</li>
+      <li>Draw an activity card at the start of each turn.</li>
+      <li>Ask one opponent for a letter or dot.</li>
+      <li>If they have more than one matching hidden space, they choose which one to expose.</li>
+      <li>A correct guess scores the exposed slot value and keeps your turn going.</li>
+      <li>A miss ends your turn unless an additional-turn card is active.</li>
+      <li>Asking for a dot from someone with no hidden dot costs 50 points.</li>
+      <li>Correctly exposing the final hidden space of a tray earns a 50-point bonus.</li>
+      <li>Interruptive guesses are available when an opponent has 5+ hidden spaces.</li>
+    </ul>
+    <form method="dialog"><button class="primaryGameBtn">Close</button></form>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
