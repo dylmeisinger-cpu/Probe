@@ -1,17 +1,19 @@
-# Multiplayer Hidden Word Card Game
+# Probe-Style Multiplayer Word Game
 
 A small online multiplayer hidden-word deduction game inspired by classic tray-and-card word games.
 
-## What it does
+## Features
 
 - 2–4 players
 - Private secret-word setup
-- 12-space trays with dots before/after the word
+- 12-space trays with dots before and/or after the word
 - 5 / 10 / 15 point slot values
 - Live online rooms with room codes
-- Scoreboard
-- Activity-card deck
-- Card effects:
+- Copyable invite link
+- Automatic reconnect on refresh
+- Live scoreboard
+- Optional turn timer
+- Activity-card deck with classic-style effects:
   - Take your normal turn
   - Take an additional turn
   - Opponent on your left exposes a letter or dot
@@ -24,6 +26,7 @@ A small online multiplayer hidden-word deduction game inspired by classic tray-a
 - Dot miss penalty
 - Full-word / full-tray guess option
 - Interruptive guess option when an opponent has 5+ hidden spaces
+- Host controls for removing lobby players, forcing the next turn, and resetting the room
 
 ## Run locally
 

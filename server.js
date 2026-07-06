@@ -15,6 +15,7 @@ const MIN_PLAYERS = 2;
 const TRAY_SIZE = 12;
 const SLOT_VALUES = [5, 5, 5, 5, 10, 10, 10, 10, 15, 15, 15, 15];
 const ROOM_TTL_MS = 1000 * 60 * 60 * 6;
+const VALID_TIMERS = new Set([0, 30, 45, 60, 90, 120]);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -63,26 +64,43 @@ function makeDeck() {
   return shuffle(deck);
 }
 
-function newRoom(hostSocketId, hostName) {
-  const code = randomCode();
-  const hostPlayer = {
-    id: hostSocketId,
-    socketId: hostSocketId,
-    name: cleanName(hostName),
+function cleanName(name) {
+  return String(name || 'Player').trim().replace(/\s+/g, ' ').slice(0, 24) || 'Player';
+}
+
+function cleanToken(token) {
+  const raw = String(token || '').trim();
+  if (/^[a-zA-Z0-9_-]{8,80}$/.test(raw)) return raw;
+  return `guest_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function newPlayer(socketId, name, token, isHost = false) {
+  return {
+    id: token,
+    token,
+    socketId,
+    name: cleanName(name),
     connected: true,
-    isHost: true,
+    isHost,
     score: 0,
     ready: false,
     slots: null,
     word: '',
     lastAction: ''
   };
+}
+
+function newRoom(hostSocketId, hostName, hostToken) {
+  const code = randomCode();
+  const hostPlayer = newPlayer(hostSocketId, hostName, hostToken, true);
 
   const room = {
     code,
     createdAt: Date.now(),
-    hostId: hostSocketId,
+    hostId: hostPlayer.id,
     status: 'lobby',
+    settings: { turnTimerSec: 0 },
+    turnEndsAt: null,
     players: [hostPlayer],
     deck: makeDeck(),
     discard: [],
@@ -100,10 +118,6 @@ function newRoom(hostSocketId, hostName) {
   return room;
 }
 
-function cleanName(name) {
-  return String(name || 'Player').trim().replace(/\s+/g, ' ').slice(0, 24) || 'Player';
-}
-
 function getRoomOfSocket(socketId) {
   for (const room of rooms.values()) {
     if (room.players.some(p => p.socketId === socketId)) return room;
@@ -115,13 +129,17 @@ function getPlayer(room, playerId) {
   return room.players.find(p => p.id === playerId);
 }
 
+function getPlayerByToken(room, token) {
+  return room.players.find(p => p.token === token);
+}
+
 function activePlayer(room) {
   return room.players[room.turnIndex];
 }
 
 function addLog(room, message) {
   room.log.unshift(message);
-  room.log = room.log.slice(0, 80);
+  room.log = room.log.slice(0, 100);
 }
 
 function hiddenCount(player) {
@@ -155,6 +173,11 @@ function drawCard(room) {
   return card;
 }
 
+function setTurnTimer(room) {
+  const seconds = room.settings?.turnTimerSec || 0;
+  room.turnEndsAt = seconds > 0 ? Date.now() + seconds * 1000 : null;
+}
+
 function startTurn(room, samePlayer = false) {
   if (!samePlayer) {
     room.turnIndex = room.turnIndex % room.players.length;
@@ -174,6 +197,7 @@ function startTurn(room, samePlayer = false) {
 
   addLog(room, `${player.name} drew: ${card.title}.`);
   applyCard(room, player, card);
+  setTurnTimer(room);
 }
 
 function applyCard(room, player, card) {
@@ -295,6 +319,7 @@ function checkGameEnd(room) {
   if (!done) return;
 
   room.status = 'ended';
+  room.turnEndsAt = null;
   const sorted = [...room.players].sort((a, b) => b.score - a.score);
   const high = sorted[0]?.score || 0;
   const winners = sorted.filter(p => p.score === high).map(p => p.name);
@@ -310,11 +335,20 @@ function advanceTurnAfterMiss(room) {
     return;
   }
 
-  room.turnIndex = (room.turnIndex + 1) % room.players.length;
+  room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
   startTurn(room, false);
 }
 
-function makePublicSlots(player, viewerId) {
+function nextConnectedTurnIndex(room, fromIndex) {
+  if (room.players.length === 0) return 0;
+  for (let step = 1; step <= room.players.length; step++) {
+    const idx = (fromIndex + step) % room.players.length;
+    if (room.players[idx].connected) return idx;
+  }
+  return (fromIndex + 1) % room.players.length;
+}
+
+function makePublicSlots(player) {
   if (!player.slots) return [];
   return player.slots.map((slot, index) => ({
     index,
@@ -337,7 +371,6 @@ function makePrivateSlots(player) {
 
 function publicState(room, viewerId) {
   const active = room.status === 'playing' ? activePlayer(room) : null;
-  const viewer = getPlayer(room, viewerId);
   return {
     code: room.code,
     status: room.status,
@@ -351,6 +384,8 @@ function publicState(room, viewerId) {
     multiplier: room.multiplier,
     firstGuessAvailable: room.firstGuessAvailable,
     additionalTurnOnMiss: room.additionalTurnOnMiss,
+    settings: room.settings,
+    turnEndsAt: room.turnEndsAt,
     awaitingExpose: room.awaitingExpose ? {
       ...room.awaitingExpose,
       allowedIndices: room.awaitingExpose.playerId === viewerId ? room.awaitingExpose.allowedIndices : []
@@ -364,7 +399,7 @@ function publicState(room, viewerId) {
       score: p.score,
       hiddenCount: hiddenCount(p),
       allExposed: p.slots ? allExposed(p) : false,
-      publicSlots: makePublicSlots(p, viewerId),
+      publicSlots: makePublicSlots(p),
       privateSlots: p.id === viewerId ? makePrivateSlots(p) : null,
       wordLength: p.word ? p.word.length : 0
     })),
@@ -408,49 +443,117 @@ function startIfReady(room) {
   if (room.status !== 'setup') return;
   if (room.players.length >= MIN_PLAYERS && room.players.every(p => p.ready && p.slots)) {
     room.status = 'playing';
-    room.turnIndex = 0;
+    room.turnIndex = room.players.findIndex(p => p.connected);
+    if (room.turnIndex < 0) room.turnIndex = 0;
     addLog(room, 'All secret trays are ready. The game begins.');
     startTurn(room, false);
   }
 }
 
+function attachSocketToPlayer(room, player, socket, name) {
+  player.socketId = socket.id;
+  player.connected = true;
+  player.name = cleanName(name || player.name);
+  socket.join(room.code);
+}
+
+function transferHostIfNeeded(room) {
+  const host = getPlayer(room, room.hostId);
+  if (host) return;
+  const nextHost = room.players[0];
+  if (!nextHost) return;
+  nextHost.isHost = true;
+  room.hostId = nextHost.id;
+  addLog(room, `${nextHost.name} is now the host.`);
+}
+
+function removePlayer(room, playerId, reason = 'removed') {
+  const idx = room.players.findIndex(p => p.id === playerId);
+  if (idx === -1) return null;
+  const [removed] = room.players.splice(idx, 1);
+  if (removed) {
+    if (removed.socketId) io.to(removed.socketId).emit(reason === 'kicked' ? 'kicked' : 'leftRoom');
+    if (room.turnIndex >= room.players.length) room.turnIndex = 0;
+    if (room.hostId === removed.id) transferHostIfNeeded(room);
+  }
+  return removed;
+}
+
 io.on('connection', (socket) => {
-  socket.on('createRoom', ({ name }) => {
-    const room = newRoom(socket.id, name);
+  socket.on('createRoom', ({ name, token }) => {
+    const safeToken = cleanToken(token);
+    const room = newRoom(socket.id, name, safeToken);
     socket.join(room.code);
-    socket.emit('joined', { code: room.code, playerId: socket.id });
+    socket.emit('joined', { code: room.code, playerId: room.players[0].id, token: safeToken });
     broadcast(room);
   });
 
-  socket.on('joinRoom', ({ code, name }) => {
+  socket.on('joinRoom', ({ code, name, token }) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) return emitError(socket, 'Room not found. Check the room code.');
+    const safeToken = cleanToken(token);
+    const existing = getPlayerByToken(room, safeToken);
+    if (existing) {
+      attachSocketToPlayer(room, existing, socket, name);
+      addLog(room, `${existing.name} rejoined the room.`);
+      socket.emit('joined', { code: room.code, playerId: existing.id, token: safeToken });
+      broadcast(room);
+      return;
+    }
+
     if (room.status !== 'lobby') return emitError(socket, 'That game already started.');
     if (room.players.length >= MAX_PLAYERS) return emitError(socket, 'That room is full.');
 
-    const player = {
-      id: socket.id,
-      socketId: socket.id,
-      name: cleanName(name),
-      connected: true,
-      isHost: false,
-      score: 0,
-      ready: false,
-      slots: null,
-      word: '',
-      lastAction: ''
-    };
+    const player = newPlayer(socket.id, name, safeToken, false);
     room.players.push(player);
     socket.join(room.code);
-    socket.emit('joined', { code: room.code, playerId: socket.id });
+    socket.emit('joined', { code: room.code, playerId: player.id, token: safeToken });
     addLog(room, `${player.name} joined the room.`);
+    broadcast(room);
+  });
+
+  socket.on('reconnectRoom', ({ code, name, token }) => {
+    const room = rooms.get(String(code || '').trim().toUpperCase());
+    if (!room) return emitError(socket, 'Could not reconnect: room not found.');
+    const safeToken = cleanToken(token);
+    const player = getPlayerByToken(room, safeToken);
+    if (!player) return emitError(socket, 'Could not reconnect: player not found in that room.');
+    attachSocketToPlayer(room, player, socket, name);
+    addLog(room, `${player.name} reconnected.`);
+    socket.emit('joined', { code: room.code, playerId: player.id, token: safeToken });
+    broadcast(room);
+  });
+
+  socket.on('setSettings', ({ turnTimerSec }) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    if (room.hostId !== room.players.find(p => p.socketId === socket.id)?.id) return emitError(socket, 'Only the host can change settings.');
+    if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'Settings can only be changed before or during setup.');
+    const value = Number.parseInt(turnTimerSec, 10);
+    if (!VALID_TIMERS.has(value)) return emitError(socket, 'Invalid timer value.');
+    room.settings.turnTimerSec = value;
+    addLog(room, `Turn timer set to ${value ? value + ' seconds' : 'off'}.`);
+    broadcast(room);
+  });
+
+  socket.on('kickPlayer', ({ playerId }) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    const self = room.players.find(p => p.socketId === socket.id);
+    if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can remove players.');
+    if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'Players can only be removed before the game starts.');
+    if (playerId === self.id) return emitError(socket, 'The host cannot remove themselves.');
+    const removed = removePlayer(room, playerId, 'kicked');
+    if (!removed) return emitError(socket, 'Player not found.');
+    addLog(room, `${removed.name} was removed by the host.`);
     broadcast(room);
   });
 
   socket.on('startSetup', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
-    if (room.hostId !== socket.id) return emitError(socket, 'Only the host can start setup.');
+    const self = room.players.find(p => p.socketId === socket.id);
+    if (room.hostId !== self?.id) return emitError(socket, 'Only the host can start setup.');
     if (room.players.length < MIN_PLAYERS) return emitError(socket, 'You need at least 2 players.');
     room.status = 'setup';
     addLog(room, 'Secret word setup started.');
@@ -461,7 +564,7 @@ io.on('connection', (socket) => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
     if (room.status !== 'setup') return emitError(socket, 'Secret words can only be entered during setup.');
-    const player = getPlayer(room, socket.id);
+    const player = room.players.find(p => p.socketId === socket.id);
     const result = validateTray(word, leftDots);
     if (!result.ok) return emitError(socket, result.message);
 
@@ -477,8 +580,8 @@ io.on('connection', (socket) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
     if (room.awaitingExpose) return emitError(socket, 'Wait for the pending exposure choice first.');
-    const asker = activePlayer(room);
-    if (!asker || asker.id !== socket.id) return emitError(socket, 'It is not your turn.');
+    const asker = room.players.find(p => p.socketId === socket.id);
+    if (!asker || activePlayer(room)?.id !== asker.id) return emitError(socket, 'It is not your turn.');
 
     const target = getPlayer(room, targetId);
     if (!target || target.id === asker.id) return emitError(socket, 'Choose a valid opponent.');
@@ -505,6 +608,7 @@ io.on('connection', (socket) => {
       revealSlot(room, target, matches[0], asker.id, 'guess', mult);
       room.firstGuessAvailable = false;
       if (room.status === 'playing') addLog(room, `${asker.name} guessed correctly and continues.`);
+      setTurnTimer(room);
       broadcast(room);
       return;
     }
@@ -520,6 +624,7 @@ io.on('connection', (socket) => {
       message: `${target.name}, choose one hidden ${normalized === '.' ? 'dot' : normalized} to expose.`
     };
     addLog(room, `${asker.name} asked ${target.name} for ${normalized === '.' ? 'a dot' : normalized}. ${target.name} must choose one to expose.`);
+    setTurnTimer(room);
     broadcast(room);
   });
 
@@ -528,11 +633,11 @@ io.on('connection', (socket) => {
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
     const pending = room.awaitingExpose;
     if (!pending) return emitError(socket, 'There is no exposure choice pending.');
-    if (pending.playerId !== socket.id) return emitError(socket, 'This exposure choice is not yours.');
+    const target = room.players.find(p => p.socketId === socket.id);
+    if (!target || pending.playerId !== target.id) return emitError(socket, 'This exposure choice is not yours.');
 
     const idx = Number.parseInt(index, 10);
     if (!pending.allowedIndices.includes(idx)) return emitError(socket, 'That slot is not allowed for this exposure.');
-    const target = getPlayer(room, socket.id);
     const mult = pending.type === 'guess' && room.firstGuessAvailable ? room.multiplier : 1;
     revealSlot(room, target, idx, pending.scoringPlayerId, pending.type === 'guess' ? 'guess' : 'card', mult);
 
@@ -545,6 +650,7 @@ io.on('connection', (socket) => {
     }
 
     room.awaitingExpose = null;
+    setTurnTimer(room);
     broadcast(room);
   });
 
@@ -553,7 +659,7 @@ io.on('connection', (socket) => {
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
     if (room.awaitingExpose) return emitError(socket, 'Wait for the pending exposure choice first.');
 
-    const guesser = getPlayer(room, socket.id);
+    const guesser = room.players.find(p => p.socketId === socket.id);
     const active = activePlayer(room);
     const target = getPlayer(room, targetId);
     if (!guesser || !target || target.id === guesser.id) return emitError(socket, 'Choose a valid opponent.');
@@ -564,7 +670,7 @@ io.on('connection', (socket) => {
 
     const raw = String(guess || '').trim().toUpperCase();
     if (!raw) return emitError(socket, 'Enter a full word or full tray pattern.');
-    const normalizedFull = raw.replace(/[^A-Z.]/g, '').replace(/DOT/g, '.');
+    const normalizedFull = raw.replace(/DOT/g, '.').replace(/[^A-Z.]/g, '');
     const fullPattern = target.slots.map(s => s.ch).join('');
     const wordOnly = target.word;
     const correct = normalizedFull === fullPattern || normalizedFull === wordOnly;
@@ -576,6 +682,7 @@ io.on('connection', (socket) => {
       checkGameEnd(room);
       if (!isInterrupt && room.status === 'playing') {
         addLog(room, `${guesser.name} continues after a correct full guess.`);
+        setTurnTimer(room);
       }
     } else {
       guesser.score -= isInterrupt ? 50 : 100;
@@ -589,9 +696,10 @@ io.on('connection', (socket) => {
   socket.on('forceNextTurn', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
-    if (room.hostId !== socket.id) return emitError(socket, 'Only the host can force the next turn.');
+    const self = room.players.find(p => p.socketId === socket.id);
+    if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can force the next turn.');
     room.awaitingExpose = null;
-    room.turnIndex = (room.turnIndex + 1) % room.players.length;
+    room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
     addLog(room, 'Host forced the next turn.');
     startTurn(room, false);
     broadcast(room);
@@ -600,8 +708,11 @@ io.on('connection', (socket) => {
   socket.on('restartRoom', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
-    if (room.hostId !== socket.id) return emitError(socket, 'Only the host can reset the room.');
+    const self = room.players.find(p => p.socketId === socket.id);
+    if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can reset the room.');
     room.status = 'lobby';
+    room.settings = { ...room.settings };
+    room.turnEndsAt = null;
     room.deck = makeDeck();
     room.discard = [];
     room.currentCard = null;
@@ -621,12 +732,24 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('leaveRoom', () => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return;
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return;
+    removePlayer(room, player.id, 'left');
+    addLog(room, `${player.name} left the room.`);
+    if (room.players.length === 0) rooms.delete(room.code);
+    else broadcast(room);
+  });
+
   socket.on('disconnect', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return;
-    const player = getPlayer(room, socket.id);
+    const player = room.players.find(p => p.socketId === socket.id);
     if (player) {
       player.connected = false;
+      player.socketId = null;
       addLog(room, `${player.name} disconnected.`);
     }
     broadcast(room);
@@ -639,9 +762,22 @@ setInterval(() => {
     const anyConnected = room.players.some(p => p.connected);
     if (!anyConnected || now - room.createdAt > ROOM_TTL_MS) {
       rooms.delete(code);
+      continue;
+    }
+
+    if (room.status === 'playing' && room.turnEndsAt && now >= room.turnEndsAt) {
+      const player = activePlayer(room);
+      if (room.awaitingExpose) {
+        addLog(room, `Time ran out while waiting for ${getPlayer(room, room.awaitingExpose.playerId)?.name || 'a player'} to expose a slot.`);
+        room.awaitingExpose = null;
+      } else if (player) {
+        addLog(room, `${player.name} ran out of time.`);
+      }
+      advanceTurnAfterMiss(room);
+      broadcast(room);
     }
   }
-}, 1000 * 60 * 15);
+}, 1000);
 
 server.listen(PORT, () => {
   console.log(`Hidden Word Card Game server listening on port ${PORT}`);
