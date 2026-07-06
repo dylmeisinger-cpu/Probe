@@ -1,13 +1,14 @@
 :root {
-  --bg: #f3f3f1;
+  --bg: #f3f4f6;
   --panel: #ffffff;
   --ink: #161616;
   --muted: #626262;
-  --line: #d0d0cc;
-  --soft: #eee;
-  --accent: #222;
-  --danger: #8a1b1b;
+  --line: #d8d8d1;
+  --soft: #f6f6f3;
+  --accent: #1f2937;
+  --danger: #9d1b1b;
   --good: #176b25;
+  --warn: #9a6b00;
 }
 
 * { box-sizing: border-box; }
@@ -15,8 +16,10 @@ body {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
   color: var(--ink);
-  background: var(--bg);
+  background: linear-gradient(180deg, #f7f8fb 0%, #f0f1f3 100%);
 }
+
+a { color: inherit; }
 
 .topbar {
   display: flex;
@@ -25,7 +28,8 @@ body {
   align-items: flex-start;
   padding: 18px 20px;
   border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(8px);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -38,43 +42,54 @@ main { padding: 20px; max-width: 1180px; margin: 0 auto; }
 .panel, .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 16px;
   margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.05);
 }
 .hidden { display: none !important; }
 
 label { display: block; font-weight: 700; margin-top: 12px; }
 input, select, button {
   font: inherit;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #aaa;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #b6b6b1;
 }
-input, select { width: 100%; max-width: 420px; background: #fff; }
+input, select {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+}
 button {
   cursor: pointer;
   border: 1px solid var(--accent);
   background: var(--accent);
   color: #fff;
+  transition: transform .08s ease, opacity .12s ease;
 }
+button:hover { transform: translateY(-1px); }
 button.secondary { background: #fff; color: var(--accent); }
 button.danger { background: var(--danger); border-color: var(--danger); }
 button:disabled { opacity: .5; cursor: not-allowed; }
+button.smallBtn { padding: 6px 10px; font-size: 13px; }
 
 .buttonRow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.spreadRow { justify-content: space-between; align-items: center; }
+.topActions { justify-content: flex-end; }
+.checkboxLabel { font-weight: 400; margin: 0; }
 .hint, .small { color: var(--muted); font-size: 14px; }
+.mono { font-family: Consolas, Menlo, monospace; word-break: break-all; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 
 .roomCode {
   display: inline-block;
-  font-size: 32px;
-  letter-spacing: 5px;
+  font-size: 34px;
+  letter-spacing: 6px;
   font-weight: 800;
-  border: 2px dashed #888;
-  padding: 8px 14px;
-  border-radius: 10px;
+  border: 2px dashed #8f8f8a;
+  padding: 10px 14px;
+  border-radius: 12px;
   background: #fafafa;
 }
 
@@ -82,6 +97,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
   gap: 16px;
+}
+.grid.twoUp {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
 .statusBar {
@@ -113,26 +131,35 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   margin-bottom: 3px;
 }
 .slot {
-  min-height: 42px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #999;
-  border-radius: 6px;
+  border: 1px solid #9fa0a0;
+  border-radius: 8px;
   font-size: 20px;
   font-weight: 800;
-  background: #fdfdfb;
+  background: #fcfcfb;
+  user-select: none;
 }
 .slot.hiddenSlot {
-  background: #242424;
-  color: #242424;
+  background: linear-gradient(180deg, #303030 0%, #1f1f1f 100%);
+  color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .slot.revealedDot { color: #777; }
 .slot.clickable {
   outline: 3px solid #444;
   cursor: pointer;
-  background: #fff8cc;
+  background: #fff5c4;
   color: #111;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(68,68,68,.25); }
+  70% { box-shadow: 0 0 0 10px rgba(68,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(68,68,68,0); }
 }
 
 .scoreTable {
@@ -148,15 +175,22 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .scoreTable th { background: #f8f8f8; }
 
 .currentCard {
-  border: 2px solid #333;
-  background: #fff;
-  border-radius: 12px;
+  border: 2px solid #2d2d2d;
+  background: linear-gradient(180deg, #fff 0%, #f7f7f5 100%);
+  border-radius: 14px;
   padding: 14px;
+  min-height: 150px;
 }
-.currentCard h3 { font-size: 20px; }
+.currentCard h3 { font-size: 20px; margin-top: 4px; }
+.tinyCaps {
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
 .log {
-  max-height: 290px;
+  max-height: 320px;
   overflow: auto;
   padding-left: 18px;
   margin-bottom: 0;
@@ -169,26 +203,54 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   padding: 12px 14px;
   background: #111;
   color: #fff;
-  border-radius: 10px;
+  border-radius: 12px;
   max-width: 320px;
   z-index: 30;
+  box-shadow: 0 12px 24px rgba(0,0,0,.18);
 }
 
 .notice {
-  border: 1px solid #b6a15b;
+  border: 1px solid #ccb666;
   background: #fff8d8;
   padding: 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   margin-bottom: 12px;
 }
 
+.playerList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.playerList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.playerList li:last-child { border-bottom: 0; }
+
 .dangerText { color: var(--danger); font-weight: 700; }
 .goodText { color: var(--good); font-weight: 700; }
+.warnText { color: var(--warn); font-weight: 700; }
 
-@media (max-width: 700px) {
+dialog {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  max-width: 620px;
+  width: calc(100% - 20px);
+}
+
+dialog::backdrop { background: rgba(0,0,0,.4); }
+
+@media (max-width: 760px) {
   .topbar { position: static; display: block; }
   main { padding: 12px; }
   .tray { grid-template-columns: repeat(6, minmax(38px, 1fr)); }
-  .slot { min-height: 45px; }
+  .slot { min-height: 48px; }
   input, select { max-width: none; }
+  .spreadRow { align-items: flex-start; }
 }

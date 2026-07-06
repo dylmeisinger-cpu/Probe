@@ -3,16 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Multiplayer Hidden Word Card Game</title>
+  <title>Probe-Style Multiplayer Word Game</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div>
-      <h1>Multiplayer Hidden Word Card Game</h1>
-      <p>Online room-code version with trays, dots, activity cards, and live scoring.</p>
+      <h1>Probe-Style Multiplayer Word Game</h1>
+      <p>Live online room-code version with trays, dots, activity cards, scorekeeping, and reconnect support.</p>
     </div>
-    <button id="rulesBtn" class="secondary">Rules</button>
+    <div class="buttonRow">
+      <button id="leaveBtn" class="secondary">Leave Room</button>
+      <button id="rulesBtn" class="secondary">Rules</button>
+    </div>
   </header>
 
   <main>
@@ -32,7 +35,8 @@
       <div class="buttonRow">
         <button id="joinBtn">Join Room</button>
       </div>
-      <p class="hint">For real online play, this project must be hosted on a Node server. The HTML alone cannot sync players.</p>
+      <div id="resumeWrap"></div>
+      <p class="hint">Share a room code or invite link. If you refresh, the app will try to reconnect you automatically.</p>
     </section>
 
     <section id="lobby" class="panel hidden"></section>
@@ -56,7 +60,9 @@
       <li>A correct guess scores the exposed slot value and you keep guessing.</li>
       <li>A miss ends your turn unless an additional-turn card is active.</li>
       <li>Asking for a dot from someone with no hidden dot costs 50 points.</li>
+      <li>Correctly exposing the final hidden space of a tray earns a 50-point bonus.</li>
       <li>Interruptive guesses are available when an opponent has 5+ hidden spaces.</li>
+      <li>Correct full guesses score 50 points on your turn or 100 interruptively. Wrong guesses lose points.</li>
     </ul>
     <form method="dialog"><button>Close</button></form>
   </dialog>

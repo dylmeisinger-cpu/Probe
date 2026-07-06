@@ -1,42 +1,130 @@
 const socket = io();
 let state = null;
-let savedName = localStorage.getItem('hwg_name') || '';
 let showOwn = false;
+let countdownTimer = null;
+let suppressReconnect = false;
+
+const STORAGE = {
+  name: 'probe_name',
+  token: 'probe_token',
+  room: 'probe_room'
+};
 
 const $ = (id) => document.getElementById(id);
 
-$('nameInput').value = savedName;
+function getOrCreateToken() {
+  let token = localStorage.getItem(STORAGE.token);
+  if (token) return token;
+  if (window.crypto?.randomUUID) token = window.crypto.randomUUID().replace(/-/g, '');
+  else token = `guest_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  localStorage.setItem(STORAGE.token, token);
+  return token;
+}
+
+function savedName() {
+  return localStorage.getItem(STORAGE.name) || '';
+}
+
+function savedRoom() {
+  return localStorage.getItem(STORAGE.room) || '';
+}
+
+function rememberRoom(code) {
+  if (code) localStorage.setItem(STORAGE.room, code);
+  const url = new URL(window.location.href);
+  if (code) url.searchParams.set('room', code);
+  else url.searchParams.delete('room');
+  history.replaceState({}, '', url.toString());
+}
+
+function clearSavedRoom() {
+  localStorage.removeItem(STORAGE.room);
+  rememberRoom('');
+}
+
+$('nameInput').value = savedName();
+$('codeInput').value = new URLSearchParams(location.search).get('room') || savedRoom();
 $('createBtn').addEventListener('click', createRoom);
 $('joinBtn').addEventListener('click', joinRoom);
 $('rulesBtn').addEventListener('click', () => $('rulesDialog').showModal());
+$('leaveBtn').addEventListener('click', leaveRoom);
 
-socket.on('joined', ({ code }) => {
+socket.on('connect', () => {
+  if (!state && !suppressReconnect) attemptReconnect();
+});
+
+socket.on('disconnect', () => {
+  if (state) showToast('Connection lost. Trying to reconnect...');
+});
+
+socket.on('joined', ({ code, token }) => {
   $('codeInput').value = code;
+  if (token) localStorage.setItem(STORAGE.token, token);
+  rememberRoom(code);
+  suppressReconnect = false;
 });
 
 socket.on('state', (next) => {
   state = next;
+  if (state?.code) rememberRoom(state.code);
   render();
 });
 
-socket.on('errorMessage', (msg) => showToast(msg));
+socket.on('errorMessage', (msg) => {
+  showToast(msg);
+  if (/could not reconnect/i.test(msg)) clearSavedRoom();
+});
+
+socket.on('kicked', () => {
+  state = null;
+  clearSavedRoom();
+  setVisible('home');
+  showToast('You were removed from the room.');
+});
+
+socket.on('leftRoom', () => {
+  state = null;
+  clearSavedRoom();
+  setVisible('home');
+});
+
+function attemptReconnect() {
+  const room = new URLSearchParams(location.search).get('room') || savedRoom();
+  const name = getName(false);
+  const token = getOrCreateToken();
+  if (!room || !name) return;
+  socket.emit('reconnectRoom', { code: room, name, token });
+}
 
 function createRoom() {
-  const name = getName();
-  socket.emit('createRoom', { name });
+  const name = getName(true);
+  socket.emit('createRoom', { name, token: getOrCreateToken() });
 }
 
 function joinRoom() {
-  const name = getName();
+  const name = getName(true);
   const code = $('codeInput').value.trim().toUpperCase();
   if (!code) return showToast('Enter a room code.');
-  socket.emit('joinRoom', { code, name });
+  socket.emit('joinRoom', { code, name, token: getOrCreateToken() });
 }
 
-function getName() {
-  const name = ($('nameInput').value || 'Player').trim().slice(0, 24) || 'Player';
-  localStorage.setItem('hwg_name', name);
-  return name;
+function leaveRoom() {
+  suppressReconnect = true;
+  socket.emit('leaveRoom');
+  state = null;
+  clearSavedRoom();
+  setVisible('home');
+}
+
+function getName(requireValue = false) {
+  const name = ($('nameInput').value || 'Player').trim().slice(0, 24);
+  if (requireValue && !name) {
+    showToast('Enter your name first.');
+    throw new Error('Name required');
+  }
+  const finalName = name || 'Player';
+  localStorage.setItem(STORAGE.name, finalName);
+  return finalName;
 }
 
 function showToast(msg) {
@@ -52,42 +140,87 @@ function setVisible(id) {
 }
 
 function render() {
-  if (!state) return setVisible('home');
+  stopCountdown();
+  if (!state) {
+    renderHomeHints();
+    return setVisible('home');
+  }
   if (state.status === 'lobby') return renderLobby();
   if (state.status === 'setup') return renderSetup();
   if (state.status === 'playing') return renderGame();
   if (state.status === 'ended') return renderEnd();
 }
 
+function renderHomeHints() {
+  const room = new URLSearchParams(location.search).get('room') || savedRoom();
+  $('resumeWrap').innerHTML = room ? `
+    <div class="notice">
+      <strong>Saved room:</strong> ${esc(room)}
+      <div class="buttonRow"><button id="resumeBtn" class="secondary">Reconnect to Saved Room</button><button id="clearSavedBtn" class="secondary">Clear</button></div>
+    </div>
+  ` : '';
+  if ($('resumeBtn')) $('resumeBtn').onclick = () => attemptReconnect();
+  if ($('clearSavedBtn')) $('clearSavedBtn').onclick = () => { clearSavedRoom(); renderHomeHints(); };
+}
+
 function renderLobby() {
   setVisible('lobby');
+  const inviteLink = `${location.origin}?room=${encodeURIComponent(state.code)}`;
   const el = $('lobby');
   el.innerHTML = `
+    <div class="buttonRow topActions">
+      <button class="secondary" id="copyCodeBtn">Copy Room Code</button>
+      <button class="secondary" id="copyLinkBtn">Copy Invite Link</button>
+    </div>
     <h2>Lobby</h2>
     <p>Share this room code with the other players:</p>
     <div class="roomCode">${esc(state.code)}</div>
-    <h3 style="margin-top:16px;">Players</h3>
-    <ul>${state.players.map(p => `<li>${esc(p.name)} ${p.isHost ? '<strong>(host)</strong>' : ''} ${p.connected ? '' : '<span class="dangerText">disconnected</span>'}</li>`).join('')}</ul>
-    <p class="hint">Need 2–4 players. Once setup starts, new people cannot join.</p>
+    <p class="hint">Invite link: <span class="mono">${esc(inviteLink)}</span></p>
+
+    <div class="grid twoUp">
+      <div class="card">
+        <h3>Players</h3>
+        <ul class="playerList">${state.players.map(p => `<li>
+          <span>${esc(p.name)} ${p.isHost ? '<strong>(host)</strong>' : ''} ${p.connected ? '' : '<span class="dangerText">disconnected</span>'}</span>
+          ${state.isHost && !p.isHost ? `<button class="secondary smallBtn" data-kick-id="${esc(p.id)}">Remove</button>` : ''}
+        </li>`).join('')}</ul>
+        <p class="hint">Need 2–4 players. Once setup starts, new people cannot join.</p>
+      </div>
+      <div class="card">
+        <h3>Game Settings</h3>
+        <label>Turn timer</label>
+        <select id="timerSelect" ${state.isHost ? '' : 'disabled'}>
+          ${[0, 30, 45, 60, 90, 120].map(v => `<option value="${v}" ${state.settings.turnTimerSec === v ? 'selected' : ''}>${v === 0 ? 'Off' : `${v} seconds`}</option>`).join('')}
+        </select>
+        <p class="hint">Optional per-turn timer. If time runs out, the turn is treated as a miss.</p>
+      </div>
+    </div>
+
     <div class="buttonRow">
       ${state.isHost ? '<button id="startSetupBtn">Start Secret Word Setup</button>' : '<span class="hint">Waiting for host to start.</span>'}
-      ${state.isHost ? '<button class="secondary" id="copyBtn">Copy Room Code</button>' : ''}
     </div>
   `;
+
+  $('copyCodeBtn').onclick = () => copyText(state.code, 'Room code copied.');
+  $('copyLinkBtn').onclick = () => copyText(inviteLink, 'Invite link copied.');
   if (state.isHost) {
     $('startSetupBtn').onclick = () => socket.emit('startSetup');
-    $('copyBtn').onclick = () => navigator.clipboard?.writeText(state.code).then(() => showToast('Room code copied.')).catch(() => showToast('Copy failed.'));
+    $('timerSelect').onchange = (e) => socket.emit('setSettings', { turnTimerSec: Number.parseInt(e.target.value, 10) });
   }
+  document.querySelectorAll('[data-kick-id]').forEach(btn => btn.onclick = () => socket.emit('kickPlayer', { playerId: btn.dataset.kickId }));
 }
 
 function renderSetup() {
   setVisible('setup');
   const me = state.players.find(p => p.id === state.youId);
-  const maxDots = Math.max(0, 12 - 1);
   $('setup').innerHTML = `
+    <div class="statusBar">
+      <span class="badge">Room ${esc(state.code)}</span>
+      <span class="badge">Timer: ${state.settings.turnTimerSec ? `${state.settings.turnTimerSec}s` : 'off'}</span>
+    </div>
     <h2>Secret Word Setup</h2>
-    <p>Room <strong>${esc(state.code)}</strong>. Enter a word up to 12 letters. Dots will fill the rest of your 12-space tray.</p>
-    <div class="notice">Your word stays on the server. Other players only see covered spaces until something is exposed.</div>
+    <p>Enter a word up to 12 letters. Dots will fill the rest of your 12-space tray.</p>
+    <div class="notice">Your word stays hidden from the other players. If you refresh, your game should reconnect automatically.</div>
     ${me.ready ? `<p class="goodText">Your secret tray is locked in. Waiting for everyone else.</p>` : `
       <label>Secret word</label>
       <input id="secretWord" maxlength="12" autocomplete="off" placeholder="Example: TREASURE" />
@@ -99,7 +232,7 @@ function renderSetup() {
     `}
     <hr />
     <h3>Players</h3>
-    <ul>${state.players.map(p => `<li>${esc(p.name)} — ${p.ready ? '<span class="goodText">ready</span>' : 'not ready'}</li>`).join('')}</ul>
+    <ul class="playerList">${state.players.map(p => `<li>${esc(p.name)} — ${p.ready ? '<span class="goodText">ready</span>' : 'not ready'}</li>`).join('')}</ul>
   `;
 
   if (!me.ready) {
@@ -137,7 +270,6 @@ function renderPreviewTray() {
 
 function renderGame() {
   setVisible('game');
-  const me = state.players.find(p => p.id === state.youId);
   const isMyTurn = state.activePlayerId === state.youId;
   const pending = state.awaitingExpose;
   const waitingOnMe = pending && pending.playerId === state.youId;
@@ -148,13 +280,14 @@ function renderGame() {
       <span class="badge ${isMyTurn ? 'good' : ''}">Turn: ${esc(state.activePlayerName)}</span>
       <span class="badge">Deck: ${state.deckCount}</span>
       <span class="badge">Discard: ${state.discardCount}</span>
+      <span class="badge" id="turnTimerBadge">Timer: ${formatRemaining(state.turnEndsAt)}</span>
       ${state.multiplier > 1 && state.firstGuessAvailable ? `<span class="badge good">First guess x${state.multiplier}</span>` : ''}
       ${state.additionalTurnOnMiss ? `<span class="badge good">Additional turn active</span>` : ''}
     </div>
 
     ${pending ? `<div class="notice"><strong>Pending:</strong> ${esc(pending.message)}</div>` : ''}
 
-    <div class="grid">
+    <div class="grid twoUp">
       <div class="card">
         <h2>Activity Card</h2>
         ${renderCard(state.currentCard)}
@@ -171,9 +304,9 @@ function renderGame() {
     </div>
 
     <div class="card">
-      <div class="buttonRow" style="justify-content:space-between;align-items:center;">
+      <div class="buttonRow spreadRow">
         <h2>Trays</h2>
-        <label style="font-weight:400;margin:0;"><input id="showOwnToggle" type="checkbox" ${showOwn ? 'checked' : ''} style="width:auto;" /> Show my secret tray on my screen</label>
+        <label class="checkboxLabel"><input id="showOwnToggle" type="checkbox" ${showOwn ? 'checked' : ''} style="width:auto;" /> Show my secret tray on my screen</label>
       </div>
       <div class="grid">${state.players.map(renderPlayerTray).join('')}</div>
     </div>
@@ -187,12 +320,14 @@ function renderGame() {
   $('showOwnToggle').onchange = (e) => { showOwn = e.target.checked; renderGame(); };
   attachActionHandlers();
   attachExposeHandlers();
+  startCountdown();
 }
 
 function renderCard(card) {
   if (!card) return '<p>No card drawn yet.</p>';
   return `
     <div class="currentCard">
+      <div class="tinyCaps">Current card</div>
       <h3>${esc(card.title)}</h3>
       <p>${esc(card.text)}</p>
     </div>
@@ -217,13 +352,8 @@ function renderScoreTable() {
 }
 
 function renderActionPanel(isMyTurn, waitingOnMe) {
-  if (waitingOnMe) {
-    return `<p>You must choose one highlighted slot from your tray to expose.</p>`;
-  }
-
-  if (state.awaitingExpose) {
-    return `<p>Waiting for ${esc(state.players.find(p => p.id === state.awaitingExpose.playerId)?.name || 'a player')} to expose a slot.</p>`;
-  }
+  if (waitingOnMe) return `<p>You must choose one highlighted slot from your tray to expose.</p>`;
+  if (state.awaitingExpose) return `<p>Waiting for ${esc(state.players.find(p => p.id === state.awaitingExpose.playerId)?.name || 'a player')} to expose a slot.</p>`;
 
   const opponents = state.players.filter(p => p.id !== state.youId && !p.allExposed);
   const allOpponents = state.players.filter(p => p.id !== state.youId);
@@ -247,9 +377,7 @@ function renderActionPanel(isMyTurn, waitingOnMe) {
     <select id="targetSelect">${opponents.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${p.hiddenCount} hidden)</option>`).join('')}</select>
     <label>Letter or dot</label>
     <input id="symbolInput" maxlength="5" placeholder="A or dot" />
-    <div class="buttonRow">
-      <button id="askBtn">Ask</button>
-    </div>
+    <div class="buttonRow"><button id="askBtn">Ask</button></div>
     <hr />
     <h3>Full Guess</h3>
     <p class="hint">Guess a word, or guess the exact 12-space tray pattern with dots.</p>
@@ -291,7 +419,7 @@ function slotHtml(ch, i, clickable = false, revealed = false, attrs = '') {
   if (clickable) classes.push('clickable');
   return `
     <div class="slotWrap">
-      <div class="slotValue">${[5,5,5,5,10,10,10,10,15,15,15,15][i]}</div>
+      <div class="slotValue">${[5, 5, 5, 5, 10, 10, 10, 10, 15, 15, 15, 15][i]}</div>
       <div class="${classes.join(' ')}" ${attrs}>${esc(display)}</div>
     </div>
   `;
@@ -306,14 +434,10 @@ function attachActionHandlers() {
   };
 
   const fullBtn = $('fullGuessBtn');
-  if (fullBtn) fullBtn.onclick = () => {
-    socket.emit('guessFull', { targetId: $('fullTarget').value, guess: $('fullGuess').value, interruptive: false });
-  };
+  if (fullBtn) fullBtn.onclick = () => socket.emit('guessFull', { targetId: $('fullTarget').value, guess: $('fullGuess').value, interruptive: false });
 
   const intBtn = $('interruptBtn');
-  if (intBtn) intBtn.onclick = () => {
-    socket.emit('guessFull', { targetId: $('interruptTarget').value, guess: $('interruptGuess').value, interruptive: true });
-  };
+  if (intBtn) intBtn.onclick = () => socket.emit('guessFull', { targetId: $('interruptTarget').value, guess: $('interruptGuess').value, interruptive: true });
 
   const force = $('forceNextBtn');
   if (force) force.onclick = () => socket.emit('forceNextTurn');
@@ -344,8 +468,38 @@ function renderEnd() {
   if (state.isHost) $('restartBtn').onclick = () => socket.emit('restartRoom');
 }
 
+function startCountdown() {
+  stopCountdown();
+  if (!state?.turnEndsAt) return;
+  const update = () => {
+    const badge = $('turnTimerBadge');
+    if (!badge) return;
+    badge.textContent = `Timer: ${formatRemaining(state.turnEndsAt)}`;
+    badge.classList.toggle('danger', state.turnEndsAt - Date.now() <= 10000);
+  };
+  update();
+  countdownTimer = setInterval(update, 250);
+}
+
+function stopCountdown() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = null;
+}
+
+function formatRemaining(endsAt) {
+  if (!endsAt) return 'off';
+  const ms = Math.max(0, endsAt - Date.now());
+  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
+}
+
+function copyText(text, okMessage) {
+  navigator.clipboard?.writeText(text).then(() => showToast(okMessage)).catch(() => showToast('Copy failed.'));
+}
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   }[c]));
 }
+
+renderHomeHints();
