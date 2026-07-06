@@ -1,71 +1,46 @@
-# Probe-Style Multiplayer Word Game
+# Word Vault Multiplayer
 
-A small online multiplayer hidden-word deduction game inspired by classic tray-and-card word games.
+A polished online multiplayer hidden-word deduction game with a warm wood/brass desktop-first UI.
 
-## Features
+## What changed in this version
 
-- 2–4 players
-- Private secret-word setup
-- 12-space trays with dots before and/or after the word
-- 5 / 10 / 15 point slot values
-- Live online rooms with room codes
-- Copyable invite link
-- Automatic reconnect on refresh
-- Live scoreboard
+- Full warm brown wood/brass UI overhaul
+- Desktop-first layout:
+  - guessing controls on the left
+  - huge word trays in the center
+  - activity card/deck beside the trays
+  - scoreboard and activity log on the right
+- Animated card draw effect
+- Glowing covered/revealed letter tiles
+- Optional sound effects using browser audio
+- Copyable room code / invite link
+- Reconnect support after refresh
 - Optional turn timer
-- Activity-card deck with classic-style effects:
-  - Take your normal turn
-  - Take an additional turn
-  - Opponent on your left exposes a letter or dot
-  - Opponent on your right exposes a letter or dot
-  - If you have a dot, expose it
-  - Triple / quadruple / quintuple the value of your first guess
-  - Add / deduct from your score
-- Correct guesses keep the turn going
-- Misses end the turn unless an additional-turn card applies
-- Dot miss penalty
-- Full-word / full-tray guess option
-- Interruptive guess option when an opponent has 5+ hidden spaces
-- Host controls for removing lobby players, forcing the next turn, and resetting the room
+- Host lobby controls
+- Mobile fallback layout, but desktop is the priority
 
 ## Run locally
-
-1. Install Node.js 18 or newer.
-2. Open a terminal in this folder.
-3. Run:
 
 ```bash
 npm install
 npm start
 ```
 
-4. Open:
+Then open:
 
 ```text
 http://localhost:3000
 ```
 
-## Let people on your home Wi-Fi join
+## Deploy on Render
 
-Start the server on your computer, then find your computer's local IP address.
-Other people on the same Wi-Fi can open something like:
+Use this as a Node web service, not a static site.
 
 ```text
-http://192.168.1.25:3000
+Build Command: npm install
+Start Command: npm start
 ```
 
-Replace that IP with your real local IP.
+## Notes
 
-## Put it online
-
-This is a Node/Express/Socket.IO app. Deploy it as a web service, not a static site.
-
-Example Render settings:
-
-- Build command: `npm install`
-- Start command: `npm start`
-- The app automatically uses `process.env.PORT || 3000`
-
-## Important limitation
-
-Rooms are stored in memory. If the server restarts, active games disappear. For a serious public version, add a database.
+This version does not depend on AI-generated image files. The look is built mostly with CSS gradients, shadows, borders, and browser-rendered UI. Later, you can replace or enhance pieces with public-domain or properly licensed assets.
