@@ -25,7 +25,10 @@
     </div>
 
     <div class="topRightCluster">
-      <button class="circleBtn" id="musicBtn" title="Toggle sound">♪</button>
+      <button class="circleBtn" id="skinBtn" title="Visual theme">🎨</button>
+      <button class="circleBtn" id="layoutBtn" title="Board layout">◎</button>
+      <button class="circleBtn" id="musicBtn" title="Toggle sound effects">♪</button>
+      <button class="circleBtn" id="ambienceBtn" title="Toggle ambient music">♬</button>
       <button class="circleBtn" id="rulesBtn" title="Rules">?</button>
       <button class="circleBtn" id="leaveBtn" title="Leave room">↩</button>
     </div>
@@ -61,9 +64,10 @@
         <h2>What’s inside</h2>
         <div class="featureGrid">
           <div><strong>Live rooms</strong><span>Play from different devices.</span></div>
-          <div><strong>Secret trays</strong><span>12-slot hidden words with dots.</span></div>
-          <div><strong>Activity cards</strong><span>Multipliers, extra turns, exposes.</span></div>
-          <div><strong>Auto scoring</strong><span>No paper bookkeeping.</span></div>
+          <div><strong>AI CPUs</strong><span>Add robot opponents for solo play.</span></div>
+          <div><strong>Round themes</strong><span>Medical, animals, tools, sports, and more.</span></div>
+          <div><strong>Tabletop mode</strong><span>Share one device in person.</span></div>
+          <div><strong>Visual skins</strong><span>Wood, neon, arcade, candy, forest, and more.</span></div>
         </div>
       </div>
     </section>
@@ -75,6 +79,16 @@
   </main>
 
   <div id="toast" class="toast hidden"></div>
+
+  <dialog id="skinDialog" class="skinDialog">
+    <h2>Visual Theme</h2>
+    <p>Change the look of your own screen without changing the room rules.</p>
+    <div id="skinOptions" class="skinOptions"></div>
+    <h3>Board Layout</h3>
+    <p>Choose stacked trays or a round-table view inspired by couch/tabletop card games. This only changes your screen.</p>
+    <div id="layoutOptions" class="layoutOptions"></div>
+    <form method="dialog"><button class="primaryGameBtn">Close</button></form>
+  </dialog>
 
   <dialog id="rulesDialog">
     <h2>Rules Summary</h2>
@@ -91,6 +105,12 @@
       <li>Asking for a dot from someone with no hidden dot costs 50 points.</li>
       <li>Correctly exposing the final hidden space of a tray earns a 50-point bonus.</li>
       <li>Interruptive guesses are available when an opponent has 5+ hidden spaces.</li>
+      <li>Optional category themes can give each round a prompt, like Medical or Animals.</li>
+      <li>Optional AI CPU players can fill empty seats or let you play solo against robots, with Easy through Genius difficulty.</li>
+      <li>Shared-device mode lets one computer host a tabletop/pass-and-play game.</li>
+      <li>Round-table UI mode puts players around a table with angled trays, while stacked mode keeps the original layout.</li>
+      <li>Players can upload small avatar pictures so their rack and score card are easier to recognize.</li>
+      <li>Click-to-expose mode lets players reveal cards verbally without typing the ask into the game.</li>
     </ul>
     <form method="dialog"><button class="primaryGameBtn">Close</button></form>
   </dialog>
