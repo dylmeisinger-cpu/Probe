@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.2.9",
-  "description": "Word Vault online multiplayer hidden word game with visible turn-card flip animation, 5-second CPU turns, and CPU action cards.",
+  "version": "1.3.0",
+  "description": "Word Vault online multiplayer hidden word game with centered deck turn-card animation, no horizontal board scroll, and refined effect timing.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
