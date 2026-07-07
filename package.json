@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.20",
-  "description": "Word Vault online multiplayer word deduction game with Discord Activity support and v4.20 tray/deck/keyboard/additional-turn stability fixes.",
+  "version": "1.4.24",
+  "description": "Word Vault online multiplayer word deduction game with repaired round/stacked board layouts, no nested game scrollbars, protected tray name spacing, click-to-select targets, and AI reveal waiting fixes.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

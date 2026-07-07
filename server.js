@@ -1272,20 +1272,36 @@ function autoResolveCpuExpose(room) {
 function maybeScheduleAi(room) {
   if (room.status !== 'playing') return;
   if (room.aiTimer) return;
-  const active = activePlayer(room);
-  const pendingTarget = room.awaitingExpose ? getPlayer(room, room.awaitingExpose.playerId) : null;
-  if (!active?.isCpu && !pendingTarget?.isCpu) return;
+
+  // v4.23: an active CPU may be waiting on a human player to flip the correct card.
+  // Do not keep re-scheduling CPU turns while a human/manual exposure is pending.
+  // The CPU only auto-acts during a pending exposure when the pending target is also a CPU.
+  if (room.awaitingExpose) {
+    const pendingTarget = getPlayer(room, room.awaitingExpose.playerId);
+    if (!pendingTarget?.isCpu) return;
+  } else if (!activePlayer(room)?.isCpu) {
+    return;
+  }
+
   const serial = ++room.aiSerial;
-  // v4.9: CPU pacing is readable but not painfully slow.
-  // Normal CPU turns wait 5 seconds. CPU exposure/choice turns also wait 5 seconds.
-  const delay = 5000;
+  const delay = room.awaitingExpose ? 1800 : 2600;
   room.aiTimer = setTimeout(() => {
     room.aiTimer = null;
     if (serial !== room.aiSerial) return;
     if (room.status !== 'playing') return;
-    if (room.awaitingExpose && getPlayer(room, room.awaitingExpose.playerId)?.isCpu) autoResolveCpuExpose(room);
-    else if (activePlayer(room)?.isCpu) cpuTakeAction(room);
-    broadcast(room);
+
+    if (room.awaitingExpose) {
+      if (getPlayer(room, room.awaitingExpose.playerId)?.isCpu) {
+        autoResolveCpuExpose(room);
+        broadcast(room);
+      }
+      return;
+    }
+
+    if (activePlayer(room)?.isCpu) {
+      cpuTakeAction(room);
+      broadcast(room);
+    }
   }, delay);
 }
 

@@ -1,102 +1,55 @@
-# Word Vault v4.16 — Discord Activity Patch
+# Word Vault 4.24
 
-This build keeps the v4.15 tray scoring and adds a Discord Activity entry point.
+Layout repair release after 4.23.
 
-## Normal web play
+## What changed
 
-Use the site normally at your Render/custom domain.
+- Restored the real Round Table orientation:
+  - your tray is bottom-center and horizontal,
+  - opponent trays sit upper-left / upper-right and angle inward,
+  - deck, current turn card, and discard stay centered in the board oval,
+  - the right-side control panel stays separate from the board.
+- Made Stacked Trays a genuinely different layout again: straight horizontal trays in a clean vertical flow instead of the round-table seating map.
+- Removed game-panel nested scrollbars. The page itself can scroll, but the Make a Guess panel, score panels, and log panels no longer trap their own scrollbars.
+- Fixed tray spacing so nameplates have their own protected row and cannot cover point values or cards.
+- Kept every tray as a 12x1 slot row with empty spaces reserved but no fake card shown.
+- Kept click-to-select targeting on other players’ trays/nameplates.
+- Kept selected-target tray glow, including dropdown and arrow-key target changes.
+- Kept gameplay popups/announcements centered inside the board rectangle only.
+- Kept faster result/player-action announcement timing from 4.23.
+- Kept the turn card face-up in the middle after it is revealed.
+- Kept the AI pending-reveal guard so CPUs wait while a human/local player chooses which matching card to flip.
 
-## Discord Activity play
+## Tray scoring
 
-Use this Activity URL in the Discord Developer Portal:
-
-```text
-https://wordvault.fyi/discord
-```
-
-Players who launch/join the same Discord Activity instance are automatically placed into the same Word Vault room. The game uses Discord display names and avatars when available.
-
-## Required Render environment variables
-
-Set these in Render → Environment:
-
-```text
-DISCORD_CLIENT_ID=your_discord_application_client_id
-DISCORD_CLIENT_SECRET=your_discord_application_client_secret
-```
-
-Optional, only if your Discord app requires it:
+The position scores are hard-coded as:
 
 ```text
-DISCORD_REDIRECT_URI=https://127.0.0.1
+5, 5, 10, 15, 15, 10, 10, 15, 15, 10, 5, 5
 ```
-
-The Activity uses Discord OAuth through the Embedded App SDK. The server exchanges the short-lived authorization code at `/api/discord/token`; the secret never goes into browser code.
-
-## Discord Developer Portal checklist
-
-1. Create/open your Discord application.
-2. Enable Activity / Embedded App support.
-3. Add a placeholder OAuth redirect URI, commonly `https://127.0.0.1`.
-4. Add Activity URL Mapping:
-   - Prefix: `/`
-   - Target: `wordvault.fyi`
-5. Set the Activity launch URL/path to `/discord`.
-6. Launch it from a Discord voice channel Activity shelf.
 
 ## Upload to GitHub
 
-Upload/replace:
+Upload/replace these files/folders from the ZIP:
 
 ```text
-server.js
 package.json
 README.md
+render.yaml
+server.js
 public/index.html
 public/client.js
 public/discord-activity.js
 public/style.css
+public/assets/
 ```
 
-Do not upload `node_modules/` or `package-lock.json`.
+The ZIP intentionally does not include `node_modules` or `package-lock.json`.
 
+## Render
 
-## v4.17 items 4-16 fix
+After uploading to GitHub:
 
-This patch intentionally skips Spotify UI/backend work and focuses only on the requested items 4-16: readable front-facing turn-card animation, center deck/discard behavior, animation queue/cooldowns, board-first layout, safe round-table spacing, 12x1 trays, card/letter centering and scaling, setup tray stability, dot rules, normal-card/deck audit, AI timing, manual reveal, keyboard guessing, sound mapping preservation, ghost-event cleanup preservation, corrected tray scoring, and Discord Activity preservation.
-
-
-## v4.18 Tray / Letter Centering Patch
-
-This surgical patch keeps the v4.17 behavior and adds:
-
-- Tray containers are centered inside the board before the word/cards are centered inside the tray.
-- Stacked/default trays are forced into a safe vertical board-first layout instead of drifting offscreen.
-- Letter and dot glyphs are centered on both the X and Y axis inside every card.
-- Glyph scaling now uses a CSS custom property instead of fighting the centering transform.
-- Card symbols remain centered as their own child layer.
-
-No Spotify, Discord, scoring, deck, AI, or gameplay logic was changed.
-
-
-## v4.19 Tray / Deck / Target Stability Patch
-- Secret trays now start at the first 5-point slot instead of being centered.
-- Normal Turn card count increased to make normal turns more common.
-- Stacked board renders opponents above the center deck and the player tray below it.
-- Turn-card mini display waits until the large flip animation finishes.
-- Arrow Left/Up and Arrow Right/Down cycle the guess target during your turn.
-- Additional tray CSS locks 12-slot racks inside their backgrounds and centers letters/dots on both axes.
-
-## v4.20 Real Tray / Deck / Additional Turn Fix
-
-This patch is focused on the exact board bugs reported after v4.18/v4.19:
-
-- Secret trays now always start at slot 1, the first 5-point position. Words are not centered inside the tray anymore.
-- Every tray remains a strict 12-slot by 1-row rack.
-- The rack background width, slot row width, and slot values now use the same CSS variables so cards cannot stick outside the tray background.
-- Letters and dots are centered on both X and Y axes using a full-card child layer.
-- Turn-card mini display no longer reveals the card face before the large flip animation finishes.
-- Arrow Left/Up and Arrow Right/Down cycle the target selector during your turn without opening the dropdown.
-- Normal Turn card count increased to 60.
-- Additional Turn cards now explicitly store their owner and activate after that player misses, keeping that same player active and drawing a new activity card.
-- This patch preserves Discord Activity support and the existing Spotify/music code without changing the Spotify setup.
+```text
+Manual Deploy → Clear build cache & deploy
+```
