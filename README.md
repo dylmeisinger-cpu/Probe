@@ -1,16 +1,12 @@
-# Word Vault 4.33
+# Word Vault 4.34
 
-Mobile phone stacked-layout update.
+Tiny active-turn glow and desktop stability patch.
 
 ## What changed
 
-- Added a phone-only stacked orientation based on the supplied mobile sketches.
-- Phone view uses stacked trays only; no round-table phone layout.
-- Desktop, fullscreen, and the current perfect computer formatting were left alone.
-- Someone else's turn: player trays stack, your tray stays visible, and the deck/current/discard row sits below.
-- Your turn: opponent trays stack, your own tray is hidden for space, the deck/current/discard row sits below, then the in-game keyboard appears.
-- The mobile action area uses the in-game keyboard; native phone keyboard text entry is avoided.
-- Mobile trays keep fixed card ratios and do not fluid-squish the letter boxes.
-- No individual game-panel scrollboxes were added.
+- The moving edge glow is restricted to the player whose turn it actually is.
+- Asked/pending target trays get the normal static target glow only, not the moving turn glow.
+- Round-table tray transform transitions are locked down so trays do not slide around when side-panel state changes.
+- Scrollbar gutters are reserved so side-panel/page scrollbar changes do not shove the board.
 
-No desktop layout, tray formatting, fullscreen behavior, scoring, AI logic, music, Discord, Spotify, or card timing changes.
+No desktop orientation, tray sizing, board spacing, fullscreen behavior, mobile layout, scoring, AI logic, music, Discord, Spotify, or card timing changes.
