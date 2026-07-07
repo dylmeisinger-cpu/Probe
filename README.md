@@ -64,3 +64,16 @@ Do not upload `node_modules/` or `package-lock.json`.
 ## v4.17 items 4-16 fix
 
 This patch intentionally skips Spotify UI/backend work and focuses only on the requested items 4-16: readable front-facing turn-card animation, center deck/discard behavior, animation queue/cooldowns, board-first layout, safe round-table spacing, 12x1 trays, card/letter centering and scaling, setup tray stability, dot rules, normal-card/deck audit, AI timing, manual reveal, keyboard guessing, sound mapping preservation, ghost-event cleanup preservation, corrected tray scoring, and Discord Activity preservation.
+
+
+## v4.18 Tray / Letter Centering Patch
+
+This surgical patch keeps the v4.17 behavior and adds:
+
+- Tray containers are centered inside the board before the word/cards are centered inside the tray.
+- Stacked/default trays are forced into a safe vertical board-first layout instead of drifting offscreen.
+- Letter and dot glyphs are centered on both the X and Y axis inside every card.
+- Glyph scaling now uses a CSS custom property instead of fighting the centering transform.
+- Card symbols remain centered as their own child layer.
+
+No Spotify, Discord, scoring, deck, AI, or gameplay logic was changed.
