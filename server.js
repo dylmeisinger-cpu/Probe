@@ -81,7 +81,7 @@ function rand(arr) {
 
 function makeDeck() {
   const templates = [
-    { code: 'NORMAL', count: 11, title: 'Take Your Normal Turn', text: 'Guess until an opponent says no.' },
+    { code: 'NORMAL', count: 18, title: 'Take Your Normal Turn', text: 'Guess until an opponent says no.' },
     { code: 'ADDITIONAL', count: 5, title: 'Take an Additional Turn', text: 'After your next miss, draw another activity card and keep playing.' },
     { code: 'LEFT_EXPOSE', count: 4, title: 'Opponent on Your Left Exposes a Letter or Dot', text: 'The opponent to your left chooses one hidden space to expose. You score its value.' },
     { code: 'RIGHT_EXPOSE', count: 4, title: 'Opponent on Your Right Exposes a Letter or Dot', text: 'The opponent to your right chooses one hidden space to expose. You score its value.' },
@@ -241,15 +241,27 @@ function drawCard(room) {
     addLog(room, 'The activity deck was reshuffled.');
   }
 
-  // Balance protection: the real deck contains 11 NORMAL cards, but random streaks
-  // can feel broken. If several action cards appear in a row, force the next
-  // available NORMAL card instead of letting the app feel like it has no normal turns.
+  // v4.8 balanced draw: normal turns are supposed to appear regularly.
+  // The deck still contains action cards, but it cannot feel like it is
+  // action-only anymore. After two non-normal cards, force a NORMAL card if
+  // one remains. After one non-normal card, heavily prefer a NORMAL card.
   let card = null;
-  if ((room.nonNormalStreak || 0) >= 3) {
-    const normalIndex = room.deck.findIndex(c => c.code === 'NORMAL');
-    if (normalIndex >= 0) card = room.deck.splice(normalIndex, 1)[0];
+  const normalIndex = room.deck.findIndex(c => c.code === 'NORMAL');
+  const streak = room.nonNormalStreak || 0;
+  if (normalIndex >= 0 && (streak >= 2 || (streak >= 1 && Math.random() < 0.65))) {
+    card = room.deck.splice(normalIndex, 1)[0];
   }
   if (!card) card = room.deck.pop();
+
+  // If random pop still creates a third action-card streak and a NORMAL card
+  // is available, swap it back into the deck and use the normal card instead.
+  if (card && card.code !== 'NORMAL' && streak >= 2) {
+    const fallbackNormalIndex = room.deck.findIndex(c => c.code === 'NORMAL');
+    if (fallbackNormalIndex >= 0) {
+      room.deck.push(card);
+      card = room.deck.splice(fallbackNormalIndex, 1)[0];
+    }
+  }
 
   room.currentCard = card || null;
   if (card) {
@@ -598,11 +610,33 @@ function transferHostIfNeeded(room) {
 function removePlayer(room, playerId, reason = 'removed') {
   const idx = room.players.findIndex(p => p.id === playerId);
   if (idx === -1) return null;
+  const wasPlaying = room.status === 'playing';
+  const wasActive = wasPlaying && room.players[room.turnIndex]?.id === playerId;
   const [removed] = room.players.splice(idx, 1);
   if (removed) {
-    if (removed.socketId) io.to(removed.socketId).emit(reason === 'kicked' ? 'kicked' : 'leftRoom');
+    if (removed.socketId) {
+      const oldSocket = io.sockets.sockets.get(removed.socketId);
+      if (oldSocket) oldSocket.leave(room.code);
+      io.to(removed.socketId).emit(reason === 'kicked' ? 'kicked' : 'leftRoom');
+    }
+    if (room.awaitingExpose?.playerId === removed.id) room.awaitingExpose = null;
+    if (idx < room.turnIndex) room.turnIndex = Math.max(0, room.turnIndex - 1);
     if (room.turnIndex >= room.players.length) room.turnIndex = 0;
     if (room.hostId === removed.id) transferHostIfNeeded(room);
+
+    // Leaving should not leave stale AI timeouts or ghost turns behind.
+    room.aiSerial++;
+    if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
+
+    if (wasPlaying && room.players.length) {
+      if (wasActive) {
+        const from = Math.max(-1, idx - 1);
+        room.turnIndex = nextConnectedTurnIndex(room, from);
+        startTurn(room, false);
+      } else {
+        setTurnTimer(room);
+      }
+    }
   }
   return removed;
 }
@@ -916,12 +950,9 @@ function maybeScheduleAi(room) {
   const pendingTarget = room.awaitingExpose ? getPlayer(room, room.awaitingExpose.playerId) : null;
   if (!active?.isCpu && !pendingTarget?.isCpu) return;
   const serial = ++room.aiSerial;
-  // v4.6: Slow CPU pacing so players can actually watch the card draw,
-  // read the log/effect, then see the AI choose. This is intentionally
-  // much slower than normal UI timing.
-  const delay = pendingTarget?.isCpu
-    ? 4200 + Math.floor(Math.random() * 900)
-    : 6800 + Math.floor(Math.random() * 1700);
+  // v4.9: CPU pacing is readable but not painfully slow.
+  // Normal CPU turns wait 5 seconds. CPU exposure/choice turns also wait 5 seconds.
+  const delay = 5000;
   room.aiTimer = setTimeout(() => {
     room.aiTimer = null;
     if (serial !== room.aiSerial) return;
@@ -1271,6 +1302,7 @@ io.on('connection', (socket) => {
     const player = socketPlayer(room, socket);
     if (!player) return;
     removePlayer(room, player.id, 'left');
+    socket.leave(room.code);
     addLog(room, `${player.name} left the room.`);
     if (room.players.length === 0) rooms.delete(room.code);
     else broadcast(room);
@@ -1284,6 +1316,10 @@ io.on('connection', (socket) => {
       player.connected = false;
       player.socketId = null;
       addLog(room, `${player.name} disconnected.`);
+      // Invalidate pending bot actions so reconnecting/closing tabs cannot leave
+      // an old AI timeout firing against stale turn state.
+      room.aiSerial++;
+      if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
     }
     broadcast(room);
   });
