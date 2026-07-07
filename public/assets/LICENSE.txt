@@ -1,0 +1,5 @@
+Word Vault v4 assets
+
+All SVG art and WAV audio files included in this folder were generated specifically for this project as original placeholder/interface assets. They are included for Dylan's Word Vault / Probe-style game and may be used, modified, and distributed with this project without attribution.
+
+No third-party sound or music files are bundled in this package.
