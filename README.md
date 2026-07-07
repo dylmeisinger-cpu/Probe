@@ -1,3 +1,9 @@
+# Word Vault v4.4 Tray + Dot + Enter Patch
+
+This patch fixes stacked-view nameplate overlap, forces every player tray to stay 12×1, adds explicit period/dot-card setup, supports empty no-card tray spaces instead of auto-filled dots, and lets players press Enter to submit letter/dot/full-word guesses.
+
+Upload/replace `server.js`, `public/client.js`, `public/style.css`, `package.json`, and `README.md`.
+
 # Word Vault v4 Final
 
 Online multiplayer hidden-word deduction game inspired by classic word-tray games.
@@ -65,3 +71,28 @@ The AI dictionary uses the `word-list` npm dependency at install time. The app a
 - Racks cannot overlap when zooming or resizing.
 - Round-table trays use one long 12-space row, with a mobile-safe horizontal scroll fallback.
 - Two-opponent round-table layout spaces the top-left and top-right racks evenly.
+
+
+## v4.2 spacing fix
+
+- Round-table racks now keep true 12-card rows with fixed-ratio letter boxes.
+- The two-opponent UNO layout uses left/right racks with a flexible center gap instead of squishing trays.
+- If the viewport is too small, the layout scrolls or falls back to stacked racks instead of overlapping.
+- Slot glyphs are now layered and centered so covered-card symbols stay centered inside each letter box.
+
+
+## v4.4 Enter-key patch
+
+- Press Enter in the letter/dot box to submit the letter/dot guess.
+- Press Enter in the full-word guess box to submit the full-word guess.
+- Press Enter in the interruptive guess box to submit the interruptive guess.
+- Press Enter while entering a secret tray to lock it in.
+
+
+## v4.5 animation / deck / logo patch
+- Added the uploaded Word Vault logo as a real UI asset.
+- Slowed AI thinking and CPU exposure timing so turns are readable.
+- Added a balanced-deck guard so normal turn cards cannot disappear behind long action-card streaks.
+- Added visible wrong-guess / miss animations and separate sounds for good, bad, normal, and special events.
+- Slowed card draw animations so action cards feel deliberate instead of instant.
+- Enforced dot placement: dots can only be before or after the word, never between letters.

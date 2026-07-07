@@ -175,9 +175,12 @@ function newRoom(hostSocketId, hostName, hostToken) {
     additionalTurnOnMiss: false,
     awaitingExpose: null,
     log: [`Room ${code} created.`],
+    effects: [],
     endedReason: '',
     aiTimer: null,
-    aiSerial: 0
+    aiSerial: 0,
+    fxSerial: 0,
+    nonNormalStreak: 0
   };
   rooms.set(code, room);
   return room;
@@ -198,11 +201,27 @@ function addLog(room, message) {
   room.log = room.log.slice(0, 120);
 }
 
+function addEffect(room, type, message, meta = {}) {
+  if (!room) return;
+  room.fxSerial = (room.fxSerial || 0) + 1;
+  const effect = { id: `${Date.now()}-${room.fxSerial}`, type, message, meta, t: Date.now() };
+  room.effects = [...(room.effects || []), effect].slice(-16);
+}
+
+function cardEffectType(card) {
+  if (!card) return 'card-normal';
+  if (card.code === 'NORMAL') return 'card-normal';
+  if (card.code === 'SCORE_MINUS_10' || card.code === 'SELF_DOT') return 'card-bad';
+  if (/SCORE_PLUS|MULT|ADDITIONAL/.test(card.code)) return 'card-good';
+  return 'card-special';
+}
+
+function slotHasCard(slot) { return !!slot && (slot.ch === '.' || /^[A-Z]$/.test(slot.ch)); }
 function hiddenCount(player) {
   if (!player.slots) return TRAY_SIZE;
-  return player.slots.filter(s => !s.revealed).length;
+  return player.slots.filter(s => slotHasCard(s) && !s.revealed).length;
 }
-function allExposed(player) { return player.slots && player.slots.every(s => s.revealed); }
+function allExposed(player) { return player.slots && player.slots.every(s => !slotHasCard(s) || s.revealed); }
 function playablePlayers(room) { return room.players.filter(p => p.slots && !allExposed(p)); }
 
 function findLeftPlayer(room, playerId) {
@@ -218,11 +237,25 @@ function drawCard(room) {
   if (room.deck.length === 0) {
     room.deck = shuffle(room.discard);
     room.discard = [];
+    room.nonNormalStreak = 0;
     addLog(room, 'The activity deck was reshuffled.');
   }
-  const card = room.deck.pop();
+
+  // Balance protection: the real deck contains 11 NORMAL cards, but random streaks
+  // can feel broken. If several action cards appear in a row, force the next
+  // available NORMAL card instead of letting the app feel like it has no normal turns.
+  let card = null;
+  if ((room.nonNormalStreak || 0) >= 3) {
+    const normalIndex = room.deck.findIndex(c => c.code === 'NORMAL');
+    if (normalIndex >= 0) card = room.deck.splice(normalIndex, 1)[0];
+  }
+  if (!card) card = room.deck.pop();
+
   room.currentCard = card || null;
-  if (card) room.discard.push(card);
+  if (card) {
+    room.discard.push(card);
+    room.nonNormalStreak = card.code === 'NORMAL' ? 0 : (room.nonNormalStreak || 0) + 1;
+  }
   return card;
 }
 
@@ -246,6 +279,7 @@ function startTurn(room, samePlayer = false) {
   }
 
   addLog(room, `${player.name} drew: ${card.title}.`);
+  addEffect(room, cardEffectType(card), `${player.name} drew ${card.title}.`, { cardCode: card.code, cardId: card.id, actorId: player.id });
   applyCard(room, player, card);
   setTurnTimer(room);
 }
@@ -284,7 +318,7 @@ function hiddenIndices(player, symbol = null, onlyDot = false) {
   const result = [];
   for (let i = 0; i < player.slots.length; i++) {
     const slot = player.slots[i];
-    if (slot.revealed) continue;
+    if (!slotHasCard(slot) || slot.revealed) continue;
     if (onlyDot && slot.ch !== '.') continue;
     if (normalized && slot.ch !== normalized) continue;
     result.push(i);
@@ -304,7 +338,7 @@ function slotValue(index) { return SLOT_VALUES[index] || 0; }
 function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1) {
   if (!target?.slots) return { ok: false, points: 0 };
   const slot = target.slots[index];
-  if (!slot || slot.revealed) return { ok: false, points: 0 };
+  if (!slot || !slotHasCard(slot) || slot.revealed) return { ok: false, points: 0 };
 
   slot.revealed = true;
   const base = slotValue(index);
@@ -334,13 +368,14 @@ function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1
     addLog(room, `${scorerName} earned a 50 point bonus for exposing ${target.name}'s final hidden space.`);
   }
 
+  addEffect(room, 'correct', `${scorerName || 'A player'} revealed ${target.name}'s ${visible}.`, { targetId: target.id, scorerId: scoringPlayerId, slotIndex: index, symbol: slot.ch, points });
   checkGameEnd(room);
   return { ok: true, points };
 }
 
 function checkGameEnd(room) {
   if (room.status !== 'playing') return;
-  const done = room.players.every(p => p.slots && p.slots.every(s => s.revealed));
+  const done = room.players.every(p => p.slots && p.slots.every(s => !slotHasCard(s) || s.revealed));
   if (!done) return;
   room.status = 'ended';
   room.turnEndsAt = null;
@@ -379,11 +414,17 @@ function advanceTurnAfterMiss(room) {
 
 function makePublicSlots(player) {
   if (!player.slots) return [];
-  return player.slots.map((slot, index) => ({ index, value: slotValue(index), revealed: !!slot.revealed, ch: slot.revealed ? slot.ch : '', hidden: !slot.revealed }));
+  return player.slots.map((slot, index) => {
+    const empty = !slotHasCard(slot);
+    return { index, value: empty ? null : slotValue(index), revealed: empty || !!slot.revealed, ch: !empty && slot.revealed ? slot.ch : '', hidden: !empty && !slot.revealed, empty };
+  });
 }
 function makePrivateSlots(player) {
   if (!player.slots) return [];
-  return player.slots.map((slot, index) => ({ index, value: slotValue(index), revealed: !!slot.revealed, ch: slot.ch }));
+  return player.slots.map((slot, index) => {
+    const empty = !slotHasCard(slot);
+    return { index, value: empty ? null : slotValue(index), revealed: empty || !!slot.revealed, ch: empty ? '' : slot.ch, empty };
+  });
 }
 
 function publicTheme(room) {
@@ -428,6 +469,7 @@ function publicState(room, viewerId) {
       privateSlots: p.id === viewerId ? makePrivateSlots(p) : null,
     })),
     log: room.log,
+    effects: room.effects || [],
     endedReason: room.endedReason
   };
 }
@@ -441,25 +483,58 @@ function broadcast(room) {
 
 function emitError(socket, message) { socket.emit('errorMessage', message); }
 
-function validateTray(wordRaw, leftDotsRaw) {
-  const word = String(wordRaw || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
-  if (!/^[A-Z]{1,12}$/.test(word)) return { ok: false, message: 'Use a secret word from 1 to 12 letters, letters only.' };
-  const dotCount = TRAY_SIZE - word.length;
-  let leftDots = Number.parseInt(leftDotsRaw, 10);
-  if (Number.isNaN(leftDots)) leftDots = 0;
-  if (leftDots < 0 || leftDots > dotCount) return { ok: false, message: `Left dots must be between 0 and ${dotCount}.` };
-  const rightDots = dotCount - leftDots;
-  const slots = [];
-  for (let i = 0; i < leftDots; i++) slots.push({ ch: '.', revealed: false });
-  for (const ch of word) slots.push({ ch, revealed: false });
-  for (let i = 0; i < rightDots; i++) slots.push({ ch: '.', revealed: false });
-  return { ok: true, word, slots, leftDots, rightDots };
+function hasInteriorDot(pattern) {
+  const chars = String(pattern || '').split('');
+  const firstLetter = chars.findIndex(ch => /[A-Z]/.test(ch));
+  const lastLetter = chars.map((ch, i) => /[A-Z]/.test(ch) ? i : -1).filter(i => i >= 0).pop();
+  if (firstLetter < 0 || lastLetter < 0) return false;
+  for (let i = firstLetter + 1; i < lastLetter; i++) {
+    if (chars[i] === '.') return true;
+  }
+  return false;
 }
 
-function applySecret(room, player, word, leftDots, sourceName = player.name) {
-  const result = validateTray(word, leftDots);
+function validateTray(trayRaw, leftDotsRaw) {
+  const rawInput = String(trayRaw || '').trim().toUpperCase();
+
+  // v4.3 tray rules:
+  // - Letters are secret word cards.
+  // - Periods are explicit dot cards.
+  // - Missing/unused positions stay empty and are not cards.
+  // - Nothing is auto-filled with dots anymore.
+  // Legacy clients that still pass a leftDots value are accepted, but new clients
+  // should send the full tray pattern in trayRaw/word.
+  let pattern = rawInput.replace(/[^A-Z.]/g, '').slice(0, TRAY_SIZE);
+
+  if (leftDotsRaw !== undefined && leftDotsRaw !== null && String(leftDotsRaw).trim() !== '' && !rawInput.includes('.')) {
+    const letters = rawInput.replace(/[^A-Z]/g, '').slice(0, TRAY_SIZE);
+    let leftDots = Number.parseInt(leftDotsRaw, 10);
+    if (Number.isNaN(leftDots)) leftDots = 0;
+    leftDots = Math.max(0, Math.min(leftDots, TRAY_SIZE - letters.length));
+    pattern = `${'.'.repeat(leftDots)}${letters}`.slice(0, TRAY_SIZE);
+  }
+
+  const word = pattern.replace(/[^A-Z]/g, '');
+  if (!/^[A-Z]{1,12}$/.test(word)) {
+    return { ok: false, message: 'Use at least one letter. Type letters for word cards and periods for dot cards.' };
+  }
+  if (hasInteriorDot(pattern)) {
+    return { ok: false, message: 'Dots can only go before or after the word. Do not put dots between letters.' };
+  }
+
+  const slots = [];
+  for (let i = 0; i < TRAY_SIZE; i++) {
+    const ch = pattern[i] || '';
+    slots.push({ ch, revealed: ch === '' });
+  }
+  return { ok: true, word, tray: pattern, slots };
+}
+
+function applySecret(room, player, tray, leftDots, sourceName = player.name) {
+  const result = validateTray(tray, leftDots);
   if (!result.ok) return result;
   player.word = result.word;
+  player.trayPattern = result.tray;
   player.slots = result.slots;
   player.ready = true;
   addLog(room, `${sourceName} locked in ${player.name}'s secret tray.`);
@@ -482,8 +557,12 @@ function pickCpuWord(room) {
 
 function autoAssignCpuSecret(room, cpu) {
   const word = pickCpuWord(room);
-  const leftDots = Math.floor(Math.random() * (TRAY_SIZE - word.length + 1));
-  applySecret(room, cpu, word, leftDots, cpu.name);
+  const maxDots = Math.min(3, TRAY_SIZE - word.length);
+  const dotCount = maxDots > 0 ? Math.floor(Math.random() * (maxDots + 1)) : 0;
+  const leftDots = dotCount > 0 ? Math.floor(Math.random() * (dotCount + 1)) : 0;
+  const rightDots = dotCount - leftDots;
+  const tray = `${'.'.repeat(leftDots)}${word}${'.'.repeat(rightDots)}`.slice(0, TRAY_SIZE);
+  applySecret(room, cpu, tray, null, cpu.name);
 }
 
 function startIfReady(room) {
@@ -564,6 +643,9 @@ function askSymbolInternal(room, asker, target, symbol) {
     if (normalized === '.') {
       asker.score -= 50;
       addLog(room, `${asker.name} loses 50 points for asking for a dot from a player with no hidden dot.`);
+      addEffect(room, 'dot-miss', `${asker.name} asked for a dot and missed. -50`, { actorId: asker.id, targetId: target.id, symbol: normalized });
+    } else {
+      addEffect(room, 'miss', `${asker.name} asked ${target.name} for ${normalized}. No match.`, { actorId: asker.id, targetId: target.id, symbol: normalized });
     }
     advanceTurnAfterMiss(room);
     return { ok: true };
@@ -619,7 +701,7 @@ function manualExposeInternal(room, target, idx, scorerId) {
   if (!room.settings.manualReveal) return { ok: false, message: 'Click-to-expose mode is turned off.' };
   if (!target?.slots) return { ok: false, message: 'That player has no tray.' };
   const slot = target.slots[idx];
-  if (!slot || slot.revealed) return { ok: false, message: 'Choose a hidden slot.' };
+  if (!slot || !slotHasCard(slot) || slot.revealed) return { ok: false, message: 'Choose a hidden card slot.' };
   const scorer = scorerId && scorerId !== target.id ? scorerId : null;
   revealSlot(room, target, idx, scorer, 'manual', 1);
   if (room.status === 'playing') setTurnTimer(room);
@@ -627,7 +709,7 @@ function manualExposeInternal(room, target, idx, scorerId) {
 }
 
 function visiblePattern(player) {
-  return (player.slots || []).map(s => s.revealed ? s.ch : '_').join('');
+  return (player.slots || []).map(s => !slotHasCard(s) ? ' ' : (s.revealed ? s.ch : '_')).join('');
 }
 
 
@@ -644,35 +726,59 @@ function cpuWordPool(room, diff) {
 }
 
 function revealedPattern(target) {
-  return (target.slots || []).map(s => s.revealed ? s.ch : '_').join('');
+  return (target.slots || []).map(s => !slotHasCard(s) ? ' ' : (s.revealed ? s.ch : '_')).join('');
 }
 
 function cpuCandidatePlacements(cpu, target, word) {
   if (!target?.slots || !/^[A-Z]{1,12}$/.test(word)) return [];
   const misses = new Set(cpu.memory[target.id]?.misses || []);
+  const cardIndices = [];
+  for (let i = 0; i < TRAY_SIZE; i++) {
+    if (slotHasCard(target.slots[i])) cardIndices.push(i);
+  }
+  if (word.length > cardIndices.length) return [];
+
   const placements = [];
-  for (let start = 0; start <= TRAY_SIZE - word.length; start++) {
-    const tray = [];
-    let ok = true;
+  const chosen = [];
+  const maxPlacements = 90;
+
+  function buildAndCheck() {
+    const letterPositions = new Set(chosen);
+    const tray = target.slots.map(s => slotHasCard(s) ? '.' : '');
+    chosen.forEach((slotIndex, letterIndex) => { tray[slotIndex] = word[letterIndex]; });
+
     const hiddenLetters = new Set();
     let hiddenDots = 0;
     for (let i = 0; i < TRAY_SIZE; i++) {
-      const ch = (i >= start && i < start + word.length) ? word[i - start] : '.';
-      tray.push(ch);
       const publicSlot = target.slots[i];
-      if (publicSlot.revealed && publicSlot.ch !== ch) { ok = false; break; }
+      const ch = tray[i];
+      if (!slotHasCard(publicSlot)) continue;
+      if (publicSlot.revealed && publicSlot.ch !== ch) return;
       if (!publicSlot.revealed) {
         if (ch === '.') hiddenDots++;
         else hiddenLetters.add(ch);
       }
     }
-    if (!ok) continue;
     for (const miss of misses) {
-      if (miss === '.' && hiddenDots > 0) { ok = false; break; }
-      if (miss !== '.' && hiddenLetters.has(miss)) { ok = false; break; }
+      if (miss === '.' && hiddenDots > 0) return;
+      if (miss !== '.' && hiddenLetters.has(miss)) return;
     }
-    if (ok) placements.push({ start, tray });
+    placements.push({ start: chosen[0] ?? 0, tray });
   }
+
+  function dfs(letterIndex, cardStart) {
+    if (placements.length >= maxPlacements) return;
+    if (letterIndex === word.length) { buildAndCheck(); return; }
+    const remainingLetters = word.length - letterIndex;
+    for (let j = cardStart; j <= cardIndices.length - remainingLetters; j++) {
+      chosen.push(cardIndices[j]);
+      dfs(letterIndex + 1, j + 1);
+      chosen.pop();
+      if (placements.length >= maxPlacements) return;
+    }
+  }
+
+  dfs(0, 0);
   return placements;
 }
 
@@ -810,7 +916,7 @@ function maybeScheduleAi(room) {
   const pendingTarget = room.awaitingExpose ? getPlayer(room, room.awaitingExpose.playerId) : null;
   if (!active?.isCpu && !pendingTarget?.isCpu) return;
   const serial = ++room.aiSerial;
-  const delay = pendingTarget?.isCpu ? 700 : 1150;
+  const delay = pendingTarget?.isCpu ? 1500 : 2400 + Math.floor(Math.random() * 900);
   room.aiTimer = setTimeout(() => {
     room.aiTimer = null;
     if (serial !== room.aiSerial) return;
@@ -830,7 +936,7 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
   const raw = String(guess || '').trim().toUpperCase();
   if (!raw) return { ok: false, message: 'Enter a full word or full tray pattern.' };
   const normalizedFull = raw.replace(/DOT/g, '.').replace(/[^A-Z.]/g, '');
-  const fullPattern = target.slots.map(s => s.ch).join('');
+  const fullPattern = target.slots.map(s => slotHasCard(s) ? s.ch : '').join('');
   const wordOnly = target.word;
   const correct = normalizedFull === fullPattern || normalizedFull === wordOnly;
 
@@ -838,6 +944,7 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
     target.slots.forEach(s => { s.revealed = true; });
     guesser.score += isInterrupt ? 100 : 50;
     addLog(room, `${guesser.name} correctly guessed ${target.name}'s ${normalizedFull === fullPattern ? 'full tray' : 'word'} and revealed it. +${isInterrupt ? 100 : 50} points.`);
+    addEffect(room, 'correct-full', `${guesser.name} solved ${target.name}'s tray. +${isInterrupt ? 100 : 50}`, { actorId: guesser.id, targetId: target.id });
     checkGameEnd(room);
     if (!isInterrupt && room.status === 'playing') {
       addLog(room, `${guesser.name} continues after a correct full guess.`);
@@ -846,6 +953,7 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
   } else {
     guesser.score -= isInterrupt ? 50 : 100;
     addLog(room, `${guesser.name} guessed ${target.name}'s word/tray incorrectly. -${isInterrupt ? 50 : 100} points.`);
+    addEffect(room, 'bad-guess', `${guesser.name} made a wrong full guess. -${isInterrupt ? 50 : 100}`, { actorId: guesser.id, targetId: target.id });
     if (!isInterrupt && active?.id === guesser.id) advanceTurnAfterMiss(room);
   }
   return { ok: true };
@@ -1005,7 +1113,7 @@ io.on('connection', (socket) => {
     if (room.players.length < MIN_PLAYERS) return emitError(socket, 'You need at least 2 players or one AI/local seat.');
     room.status = 'setup';
     room.currentTheme = selectCurrentTheme(room);
-    room.players.forEach(p => { p.ready = false; p.slots = null; p.word = ''; p.score = 0; p.memory = {}; });
+    room.players.forEach(p => { p.ready = false; p.slots = null; p.word = ''; p.trayPattern = ''; p.score = 0; p.memory = {}; });
     room.players.filter(p => p.isCpu).forEach(cpu => autoAssignCpuSecret(room, cpu));
     addLog(room, 'Secret word setup started.');
     if (room.currentTheme) addLog(room, `Round theme selected: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
@@ -1013,19 +1121,19 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
-  socket.on('submitSecret', ({ word, leftDots }) => {
+  socket.on('submitSecret', ({ word, tray, leftDots } = {}) => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
     if (room.status !== 'setup') return emitError(socket, 'Secret words can only be entered during setup.');
     const player = socketPlayer(room, socket);
     if (!player) return emitError(socket, 'Player not found.');
-    const result = applySecret(room, player, word, leftDots, player.name);
+    const result = applySecret(room, player, tray ?? word, leftDots, player.name);
     if (!result.ok) return emitError(socket, result.message);
     startIfReady(room);
     broadcast(room);
   });
 
-  socket.on('submitSecretForPlayer', ({ playerId, word, leftDots }) => {
+  socket.on('submitSecretForPlayer', ({ playerId, word, tray, leftDots } = {}) => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
     if (room.status !== 'setup') return emitError(socket, 'Secret words can only be entered during setup.');
@@ -1033,7 +1141,7 @@ io.on('connection', (socket) => {
     if (!self || !canControlPlayer(room, self, playerId)) return emitError(socket, 'You cannot set that player’s tray.');
     const player = getPlayer(room, playerId);
     if (!player || player.isCpu) return emitError(socket, 'Choose a local/non-CPU player.');
-    const result = applySecret(room, player, word, leftDots, self.id === player.id ? player.name : `${self.name} (host)`);
+    const result = applySecret(room, player, tray ?? word, leftDots, self.id === player.id ? player.name : `${self.name} (host)`);
     if (!result.ok) return emitError(socket, result.message);
     startIfReady(room);
     broadcast(room);
@@ -1096,8 +1204,10 @@ io.on('connection', (socket) => {
     if (dotPenalty) {
       actor.score -= 50;
       addLog(room, `${actor.name} had a verbal dot miss and loses 50 points.`);
+      addEffect(room, 'dot-miss', `${actor.name} had a verbal dot miss. -50`, { actorId: actor.id });
     } else {
       addLog(room, `${actor.name} had a verbal miss.`);
+      addEffect(room, 'miss', `${actor.name} missed. Turn passes.`, { actorId: actor.id });
     }
     advanceTurnAfterMiss(room);
     broadcast(room);
@@ -1145,7 +1255,7 @@ io.on('connection', (socket) => {
     room.endedReason = '';
     room.aiSerial++;
     if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
-    for (const p of room.players) { p.score = 0; p.ready = false; p.slots = null; p.word = ''; p.memory = {}; }
+    for (const p of room.players) { p.score = 0; p.ready = false; p.slots = null; p.word = ''; p.trayPattern = ''; p.memory = {}; }
     room.log = ['Room reset.'];
     broadcast(room);
   });
