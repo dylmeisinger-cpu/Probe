@@ -81,7 +81,7 @@ function rand(arr) {
 
 function makeDeck() {
   const templates = [
-    { code: 'NORMAL', count: 18, title: 'Take Your Normal Turn', text: 'Guess until an opponent says no.' },
+    { code: 'NORMAL', count: 22, title: 'Normal Turn', text: 'Make a normal letter, dot, or word guess.' },
     { code: 'ADDITIONAL', count: 5, title: 'Take an Additional Turn', text: 'After your next miss, draw another activity card and keep playing.' },
     { code: 'LEFT_EXPOSE', count: 4, title: 'Opponent on Your Left Exposes a Letter or Dot', text: 'The opponent to your left chooses one hidden space to expose. You score its value.' },
     { code: 'RIGHT_EXPOSE', count: 4, title: 'Opponent on Your Right Exposes a Letter or Dot', text: 'The opponent to your right chooses one hidden space to expose. You score its value.' },
@@ -178,6 +178,7 @@ function newRoom(hostSocketId, hostName, hostToken) {
     effects: [],
     endedReason: '',
     aiTimer: null,
+    disconnectTimers: new Map(),
     aiSerial: 0,
     fxSerial: 0,
     nonNormalStreak: 0
@@ -506,6 +507,14 @@ function hasInteriorDot(pattern) {
   return false;
 }
 
+
+function centerTrayPattern(pattern) {
+  const clean = String(pattern || '').replace(/[^A-Z.]/g, '').slice(0, TRAY_SIZE);
+  if (!clean) return ''.padEnd(TRAY_SIZE, ' ');
+  const left = Math.floor((TRAY_SIZE - clean.length) / 2);
+  return `${' '.repeat(Math.max(0, left))}${clean}`.padEnd(TRAY_SIZE, ' ').slice(0, TRAY_SIZE);
+}
+
 function validateTray(trayRaw, leftDotsRaw) {
   const rawInput = String(trayRaw || '').trim().toUpperCase();
 
@@ -534,9 +543,11 @@ function validateTray(trayRaw, leftDotsRaw) {
     return { ok: false, message: 'Dots can only go before or after the word. Do not put dots between letters.' };
   }
 
+  const centeredPattern = centerTrayPattern(pattern);
   const slots = [];
   for (let i = 0; i < TRAY_SIZE; i++) {
-    const ch = pattern[i] || '';
+    const rawCh = centeredPattern[i] || '';
+    const ch = rawCh === ' ' ? '' : rawCh;
     slots.push({ ch, revealed: ch === '' });
   }
   return { ok: true, word, tray: pattern, slots };
@@ -594,6 +605,10 @@ function attachSocketToPlayer(room, player, socket, name) {
   player.socketId = socket.id;
   player.connected = true;
   player.name = cleanName(name || player.name);
+  if (room.disconnectTimers?.has(player.id)) {
+    clearTimeout(room.disconnectTimers.get(player.id));
+    room.disconnectTimers.delete(player.id);
+  }
   socket.join(room.code);
 }
 
@@ -624,9 +639,15 @@ function removePlayer(room, playerId, reason = 'removed') {
     if (room.turnIndex >= room.players.length) room.turnIndex = 0;
     if (room.hostId === removed.id) transferHostIfNeeded(room);
 
+    if (room.disconnectTimers?.has(removed.id)) {
+      clearTimeout(room.disconnectTimers.get(removed.id));
+      room.disconnectTimers.delete(removed.id);
+    }
+
     // Leaving should not leave stale AI timeouts or ghost turns behind.
     room.aiSerial++;
     if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
+    if (room.disconnectTimers) { for (const t of room.disconnectTimers.values()) clearTimeout(t); room.disconnectTimers.clear(); }
 
     if (wasPlaying && room.players.length) {
       if (wasActive) {
@@ -668,6 +689,10 @@ function askSymbolInternal(room, asker, target, symbol) {
 
   const normalized = normalizeSymbol(symbol);
   if (!normalized) return { ok: false, message: 'Ask for one letter, or ask for a dot.' };
+
+  if (asker.isCpu) {
+    addEffect(room, 'cpu-action', `${asker.name} asks ${target.name} for ${normalized === '.' ? 'a dot' : normalized}.`, { actorId: asker.id, targetId: target.id, symbol: normalized });
+  }
 
   const matches = hiddenIndices(target, normalized, false);
   if (matches.length === 0) {
@@ -1320,6 +1345,21 @@ io.on('connection', (socket) => {
       // an old AI timeout firing against stale turn state.
       room.aiSerial++;
       if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
+      if (room.status === 'playing' && activePlayer(room)?.id === player.id) {
+        if (room.disconnectTimers?.has(player.id)) clearTimeout(room.disconnectTimers.get(player.id));
+        const timer = setTimeout(() => {
+          room.disconnectTimers?.delete(player.id);
+          if (room.status !== 'playing') return;
+          const stillGone = getPlayer(room, player.id);
+          if (!stillGone || stillGone.connected || activePlayer(room)?.id !== player.id) return;
+          room.awaitingExpose = room.awaitingExpose?.playerId === player.id ? null : room.awaitingExpose;
+          room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
+          addLog(room, `${player.name}'s stale turn was skipped after disconnect.`);
+          if (room.players.length) startTurn(room, false);
+          broadcast(room);
+        }, 10000);
+        room.disconnectTimers?.set(player.id, timer);
+      }
     }
     broadcast(room);
   });
@@ -1331,6 +1371,7 @@ setInterval(() => {
     const anyConnected = room.players.some(p => p.connected && p.socketId);
     if (!anyConnected || now - room.createdAt > ROOM_TTL_MS) {
       if (room.aiTimer) clearTimeout(room.aiTimer);
+      if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
       rooms.delete(code);
       continue;
     }

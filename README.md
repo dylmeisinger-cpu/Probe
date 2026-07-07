@@ -48,3 +48,19 @@ Then run:
 ```text
 Manual Deploy → Clear build cache & deploy
 ```
+
+## v4.11 Board Stability + Card Animation Fix
+
+This patch focuses on stability and correctness only. It keeps the warm Word Vault UI while fixing the board/tray geometry, true face-up turn-card animation, center deck origin, event cooldowns, explicit dot rules, normal card visibility, AI timing, sounds, and stale reconnect/leave cleanup.
+
+Key guarantees:
+- Turn/activity cards animate from the center deck and flip to a readable front.
+- The deck/discard stays in the center table area and does not crush layout.
+- Board and trays never require horizontal scrolling.
+- Every tray is always 12x1.
+- Short words are centered in the 12-space tray and unused spaces remain empty.
+- Letters, dots, and symbols are centered and scale inside their card boxes.
+- Dots can only go before or after the word.
+- Normal Turn cards are explicit and frequent enough to see.
+- CPU turns wait 5 seconds; CPU action cards display for 3 seconds.
+- Leaving, reconnecting, and closing tabs clear stale visual queues and server timers.
