@@ -1,0 +1,8 @@
+Word Vault v4 assets
+
+All SVG art and WAV audio files included in this folder were generated specifically for this project as original placeholder/interface assets. They are included for Dylan's Word Vault / Probe-style game and may be used, modified, and distributed with this project without attribution.
+
+This package also includes user-supplied MP3 sound effects placed in public/assets/sounds for the v4.8 update: flip-card.mp3, angels-singing.mp3, cha-ching.mp3, and boo-womp.mp3. They were provided by the project owner for use in this game; keep or replace them only if you have the rights to use them.
+
+v4.13 music tracks:
+The files in public/assets/music/ were provided by the project owner for use as Word Vault's default music playlist. Keep/replace them only with tracks you have rights to use.
