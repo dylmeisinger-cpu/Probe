@@ -521,6 +521,14 @@ function findRightPlayer(room, playerId) {
 }
 
 function drawCard(room) {
+  // Move the previous current card to discard only when the next card is drawn.
+  // This keeps deck/discard counts honest while the visible current-turn card stays
+  // in the middle of the board until the turn changes.
+  if (room.currentCard) {
+    room.discard.push(room.currentCard);
+    room.currentCard = null;
+  }
+
   if (room.deck.length === 0) {
     room.deck = shuffle(room.discard);
     room.discard = [];
@@ -528,10 +536,6 @@ function drawCard(room) {
     addLog(room, 'The activity deck was reshuffled.');
   }
 
-  // v4.8 balanced draw: normal turns are supposed to appear regularly.
-  // The deck still contains action cards, but it cannot feel like it is
-  // action-only anymore. After two non-normal cards, force a NORMAL card if
-  // one remains. After one non-normal card, heavily prefer a NORMAL card.
   let card = null;
   const normalIndex = room.deck.findIndex(c => c.code === 'NORMAL');
   const streak = room.nonNormalStreak || 0;
@@ -540,8 +544,6 @@ function drawCard(room) {
   }
   if (!card) card = room.deck.pop();
 
-  // If random pop still creates a third action-card streak and a NORMAL card
-  // is available, swap it back into the deck and use the normal card instead.
   if (card && card.code !== 'NORMAL' && streak >= 2) {
     const fallbackNormalIndex = room.deck.findIndex(c => c.code === 'NORMAL');
     if (fallbackNormalIndex >= 0) {
@@ -551,10 +553,7 @@ function drawCard(room) {
   }
 
   room.currentCard = card || null;
-  if (card) {
-    room.discard.push(card);
-    room.nonNormalStreak = card.code === 'NORMAL' ? 0 : (room.nonNormalStreak || 0) + 1;
-  }
+  if (card) room.nonNormalStreak = card.code === 'NORMAL' ? 0 : (room.nonNormalStreak || 0) + 1;
   return card;
 }
 

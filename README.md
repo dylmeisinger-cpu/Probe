@@ -59,3 +59,8 @@ public/style.css
 ```
 
 Do not upload `node_modules/` or `package-lock.json`.
+
+
+## v4.17 items 4-16 fix
+
+This patch intentionally skips Spotify UI/backend work and focuses only on the requested items 4-16: readable front-facing turn-card animation, center deck/discard behavior, animation queue/cooldowns, board-first layout, safe round-table spacing, 12x1 trays, card/letter centering and scaling, setup tray stability, dot rules, normal-card/deck audit, AI timing, manual reveal, keyboard guessing, sound mapping preservation, ghost-event cleanup preservation, corrected tray scoring, and Discord Activity preservation.
