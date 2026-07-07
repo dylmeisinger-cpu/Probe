@@ -19,6 +19,19 @@ const ROOM_TTL_MS = 1000 * 60 * 60 * 6;
 const VALID_TIMERS = new Set([0, 30, 45, 60, 90, 120]);
 const CPU_DIFFICULTIES = new Set(['easy', 'medium', 'hard', 'genius']);
 
+// Server-side estimate of the client announcement queue. AI should not choose
+// before the turn-card draw/reveal and other board announcements have cleared.
+// Keep these in sync with public/client.js timing values, with a small safety pad.
+const AI_ANNOUNCEMENT_INITIAL_PAUSE_MS = 1050;
+const AI_ANNOUNCEMENT_BETWEEN_PAUSE_MS = 850;
+const AI_ANNOUNCEMENT_SAFETY_MS = 450;
+const AI_EFFECT_DURATIONS_MS = {
+  card: 5040,
+  cpu: 2280,
+  result: 2580,
+  normal: 2180
+};
+
 
 const DISCORD_SCOPES = ['identify'].join(' ');
 const DISCORD_SDK_CDN = 'https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@2.5.0/+esm';
@@ -419,6 +432,7 @@ function newRoom(hostSocketId, hostName, hostToken) {
     disconnectTimers: new Map(),
     aiSerial: 0,
     fxSerial: 0,
+    effectsQuietUntil: 0,
     nonNormalStreak: 0
   };
   rooms.set(code, room);
@@ -489,11 +503,25 @@ function addLog(room, message) {
   room.log = room.log.slice(0, 120);
 }
 
+function effectDurationForAiDelay(type, meta = {}) {
+  if (meta?.cardCode || /^card/.test(String(type || ''))) return AI_EFFECT_DURATIONS_MS.card;
+  if (type === 'cpu-action') return AI_EFFECT_DURATIONS_MS.cpu;
+  if (/correct|miss|bad/i.test(String(type || ''))) return AI_EFFECT_DURATIONS_MS.result;
+  return AI_EFFECT_DURATIONS_MS.normal;
+}
+
 function addEffect(room, type, message, meta = {}) {
   if (!room) return;
   room.fxSerial = (room.fxSerial || 0) + 1;
-  const effect = { id: `${Date.now()}-${room.fxSerial}`, type, message, meta, t: Date.now() };
+  const now = Date.now();
+  const effect = { id: `${now}-${room.fxSerial}`, type, message, meta, t: now };
   room.effects = [...(room.effects || []), effect].slice(-16);
+
+  // CPU turns are server-driven, but announcements/card draws are client-side.
+  // Stack an estimated quiet time so CPUs do not make a guess until the visible
+  // queue is done: previous result cards, the new turn-card draw, and settle.
+  const queueStart = Math.max(room.effectsQuietUntil || 0, now + AI_ANNOUNCEMENT_INITIAL_PAUSE_MS);
+  room.effectsQuietUntil = queueStart + effectDurationForAiDelay(type, meta) + AI_ANNOUNCEMENT_BETWEEN_PAUSE_MS;
 }
 
 function cardEffectType(card) {
@@ -1284,7 +1312,9 @@ function maybeScheduleAi(room) {
   }
 
   const serial = ++room.aiSerial;
-  const delay = room.awaitingExpose ? 1800 : 2600;
+  const baseDelay = room.awaitingExpose ? 1800 : 2600;
+  const announcementDelay = Math.max(0, (room.effectsQuietUntil || 0) - Date.now() + AI_ANNOUNCEMENT_SAFETY_MS);
+  const delay = Math.max(baseDelay, announcementDelay);
   room.aiTimer = setTimeout(() => {
     room.aiTimer = null;
     if (serial !== room.aiSerial) return;
@@ -1643,6 +1673,7 @@ io.on('connection', (socket) => {
     room.awaitingExpose = null;
     room.endedReason = '';
     room.aiSerial++;
+    room.effectsQuietUntil = 0;
     if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
     for (const p of room.players) { p.score = 0; p.ready = false; p.slots = null; p.word = ''; p.trayPattern = ''; p.memory = {}; }
     room.log = ['Room reset.'];
