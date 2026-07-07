@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.32",
-  "description": "Word Vault keyboard stability and board fullscreen drawer update.",
+  "version": "1.4.33",
+  "description": "Word Vault mobile phone stacked layout update.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
