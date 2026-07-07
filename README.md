@@ -58,3 +58,10 @@ The AI dictionary uses the `word-list` npm dependency at install time. The app a
 3. On Render, keep Build Command and Start Command as listed above.
 4. Deploy latest commit.
 5. Test: create room, add CPU, enable themes, try stacked/round layout, upload avatar, and test on phone.
+
+
+## v4.1 Round-table overlap fix
+- Round-table / UNO layout now uses grid seats instead of absolute rack positioning.
+- Racks cannot overlap when zooming or resizing.
+- Round-table trays use one long 12-space row, with a mobile-safe horizontal scroll fallback.
+- Two-opponent round-table layout spaces the top-left and top-right racks evenly.

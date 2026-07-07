@@ -1,6 +1,6 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Word Vault online multiplayer hidden word game with AI CPUs, themes, and tabletop mode.",
   "main": "server.js",
   "scripts": {
