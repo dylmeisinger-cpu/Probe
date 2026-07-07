@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.0.0",
-  "description": "Online multiplayer hidden word guessing game with Probe-style activity cards.",
+  "version": "1.2.0",
+  "description": "Word Vault online multiplayer hidden word game with AI CPUs, themes, and tabletop mode.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "express": "^4.18.3",
-    "socket.io": "^4.8.1"
-  }
+    "socket.io": "^4.8.1",
+    "word-list": "^4.1.0"
+  },
+  "packageManager": "yarn@1.22.22"
 }

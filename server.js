@@ -1,25 +1,61 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' }
-});
+const io = new Server(server, { cors: { origin: '*' } });
 
 const PORT = process.env.PORT || 3000;
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 6;
 const MIN_PLAYERS = 2;
 const TRAY_SIZE = 12;
 const SLOT_VALUES = [5, 5, 5, 5, 10, 10, 10, 10, 15, 15, 15, 15];
 const ROOM_TTL_MS = 1000 * 60 * 60 * 6;
 const VALID_TIMERS = new Set([0, 30, 45, 60, 90, 120]);
+const CPU_DIFFICULTIES = new Set(['easy', 'medium', 'hard', 'genius']);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms = new Map();
+
+const THEMES = [
+  { id: 'medical', name: 'Medical', emoji: '⚕️', examples: ['DOCTOR', 'VACCINE', 'SURGERY', 'HOSPITAL', 'FEVER', 'BANDAGE'], words: ['DOCTOR','NURSE','VACCINE','SURGERY','HOSPITAL','MEDICINE','BANDAGE','THERAPY','FEVER','CLINIC','SYRINGE','PATIENT','DENTIST','PHARMACY','BLOOD','VIRUS','HEART','BRAIN','X RAY'.replace(' ',''),'SCALPEL','PULSE','ALLERGY','ASTHMA','CAST'] },
+  { id: 'animals', name: 'Animals', emoji: '🐾', examples: ['TIGER', 'DOLPHIN', 'RABBIT', 'FALCON', 'LIZARD'], words: ['TIGER','DOLPHIN','RABBIT','FALCON','LIZARD','PENGUIN','ELEPHANT','GIRAFFE','WOLF','EAGLE','SHARK','TURTLE','BEAVER','COYOTE','HORSE','BADGER','OTTER','MOOSE','PANDA','GORILLA','OCTOPUS','LOBSTER'] },
+  { id: 'tools', name: 'Tools', emoji: '🧰', examples: ['HAMMER', 'WRENCH', 'DRILL', 'LADDER', 'PLIERS'], words: ['HAMMER','WRENCH','DRILL','LADDER','PLIERS','SAW','RATCHET','SCREWDRIVER','CHISEL','SANDER','GRINDER','LEVEL','CLAMP','ANVIL','TORCH','SHOVEL','ROUTER','TAPE','MALLET','AUGER'] },
+  { id: 'sports', name: 'Sports', emoji: '🏆', examples: ['HOCKEY', 'SOCCER', 'BASEBALL', 'TENNIS', 'SKIING'], words: ['HOCKEY','SOCCER','BASEBALL','TENNIS','SKIING','FOOTBALL','BASKETBALL','GOLF','BOXING','RUGBY','LACROSSE','WRESTLING','SWIMMING','RUNNING','CYCLING','SKATING','ARCHERY','BOWLING','VOLLEYBALL'] },
+  { id: 'food', name: 'Food', emoji: '🍕', examples: ['PIZZA', 'BURGER', 'PANCAKE', 'TACO', 'NOODLES'], words: ['PIZZA','BURGER','PANCAKE','TACO','NOODLES','SPAGHETTI','CHEESE','CHICKEN','WAFFLE','SALMON','COOKIE','BROWNIE','AVOCADO','BANANA','STRAWBERRY','SANDWICH','BACON','PASTA','RAMEN','OMELET'] },
+  { id: 'movies', name: 'Movies & TV', emoji: '🎬', examples: ['WESTERN', 'VILLAIN', 'COMEDY', 'ALIEN', 'CASTLE'], words: ['WESTERN','VILLAIN','COMEDY','ALIEN','CASTLE','ROBOT','DRAGON','SPY','PIRATE','ZOMBIE','MYSTERY','CARTOON','SEQUEL','CAMERA','ACTOR','DIRECTOR','MONSTER','HERO','SCRIPT','CINEMA'] },
+  { id: 'science', name: 'Science', emoji: '🔬', examples: ['PLANET', 'ATOM', 'ROCKET', 'FOSSIL', 'LASER'], words: ['PLANET','ATOM','ROCKET','FOSSIL','LASER','GALAXY','QUANTUM','MINERAL','CHEMISTRY','BIOLOGY','GRAVITY','ORBIT','PLASMA','NEUTRON','ECLIPSE','MAMMOTH','VOLCANO','CRYSTAL','OXYGEN','MAGNET'] },
+  { id: 'places', name: 'Places', emoji: '🗺️', examples: ['CASTLE', 'FOREST', 'AIRPORT', 'ISLAND', 'MUSEUM'], words: ['CASTLE','FOREST','AIRPORT','ISLAND','MUSEUM','LIBRARY','STADIUM','HARBOR','DESERT','CANYON','VILLAGE','MARKET','THEATER','BRIDGE','TEMPLE','HOTEL','PARK','SCHOOL','FARM','DUNGEON'] },
+  { id: 'video_games', name: 'Video Games', emoji: '🎮', examples: ['BOSS', 'QUEST', 'ARCADE', 'PORTAL', 'HEALER'], words: ['BOSS','QUEST','ARCADE','PORTAL','HEALER','MAGE','CASTLE','LOOT','SHIELD','DUNGEON','AVATAR','PIXEL','COMBO','RESPAWN','LEVEL','COIN','DRAGON','ROBOT','SNIPER','RACING'] },
+  { id: 'random_hard', name: 'Random Hard Mode', emoji: '🧩', examples: ['CRYPTIC', 'JIGSAW', 'QUARTZ', 'ZEPHYR', 'JINX'], words: ['CRYPTIC','JIGSAW','QUARTZ','ZEPHYR','JINX','OXYGEN','VORTEX','GALAXY','PUZZLE','MYSTERY','COBALT','WIZARD','JAZZ','ZODIAC','FJORD','PIXEL','GLYPH','ONYX','NYMPH','KAYAK'] }
+];
+
+const THEME_MAP = new Map(THEMES.map(t => [t.id, t]));
+const GENERAL_CPU_WORDS = ['ABOUT','ABOVE','ABROAD','ABSENT','ACCEPT','ACCESS','ACCIDENT','ACCOUNT','ACID','ACORN','ACRYLIC','ACTION','ACTIVE','ACTOR','ACUTE','ADAPT','ADDED','ADDRESS','ADJUST','ADMIT','ADULT','ADVICE','AFFAIR','AFTER','AGAIN','AGENT','AGREE','AHEAD','ALARM','ALBUM','ALERT','ALIEN','ALIVE','ALLOW','ALMOST','ALONE','ALONG','ALTER','AMBER','ANCHOR','ANCIENT','ANGLE','ANIMAL','ANSWER','ANXIETY','APPLE','APRON','AREA','ARGUE','ARROW','ASHES','ASPECT','ATOM','ATTIC','AUDIO','AUTUMN','AVOID','AWARD','AWARE','AWFUL','BACK','BACON','BADGE','BAGEL','BAKER','BALCONY','BALLOON','BANANA','BANK','BARREL','BASIC','BASKET','BATTERY','BEACH','BEACON','BEAN','BEAUTY','BEFORE','BEGIN','BEHIND','BELIEF','BELL','BELT','BERRY','BETTER','BEYOND','BICYCLE','BIRD','BIRTH','BLANKET','BLAST','BLAZER','BLEND','BLIZZARD','BLOOM','BOARD','BOAT','BODY','BOLT','BONE','BONUS','BOOK','BORDER','BOTTLE','BOTTOM','BRAIN','BRANCH','BRAVE','BREAD','BRIDGE','BRIGHT','BROKEN','BRONZE','BROTHER','BRUSH','BUBBLE','BUCKET','BUDGET','BUILDER','BULLET','BUNDLE','BURGER','BUTTON','CABIN','CABLE','CAMERA','CANDLE','CANDY','CANVAS','CARBON','CARD','CAREFUL','CARPET','CASTLE','CASUAL','CATTLE','CAUSE','CEDAR','CENTER','CEREAL','CHAIN','CHAIR','CHANGE','CHARGE','CHEESE','CHERRY','CHEST','CHICKEN','CHOICE','CHURCH','CIRCLE','CITY','CLINIC','CLOCK','CLOSET','CLOUD','COACH','COAST','COBALT','COFFEE','COLLAR','COMEDY','COMMON','COMPASS','COPPER','CORNER','COTTON','COUNTY','COUPON','COYOTE','CRADLE','CRAFT','CRANE','CRASH','CRAYON','CREAM','CREDIT','CREEK','CRICKET','CRISP','CRYSTAL','CYCLE','DAMAGE','DANGER','DEALER','DECADE','DECENT','DECIDE','DEEPER','DEFEND','DEGREE','DELIGHT','DESERT','DESIGN','DESK','DETAIL','DEVICE','DIAMOND','DINNER','DIRECT','DOCTOR','DOLLAR','DONKEY','DOOR','DOUBLE','DRAGON','DRAWER','DREAM','DRESS','DRIFT','DRIVER','DUST','EAGLE','EARLY','EARTH','ECHO','EDITOR','EFFECT','EFFORT','ELBOW','ELECTRIC','EMBER','ENGINE','ENOUGH','ESCAPE','EVENT','EVERY','EXACT','EXCITE','EXHIBIT','FABRIC','FACTOR','FAMILY','FANCY','FARMER','FATHER','FAUCET','FAVOR','FEATHER','FEATURE','FENCE','FEVER','FIELD','FIGURE','FILTER','FINAL','FINGER','FINISH','FIRE','FISHING','FLAME','FLAVOR','FLEECE','FLIGHT','FLOAT','FLOWER','FOLDER','FOREST','FORK','FORMAT','FOSSIL','FOUNTAIN','FRAME','FREEDOM','FREEZER','FRIEND','FROST','FRUIT','FUTURE','GALAXY','GARAGE','GARDEN','GARLIC','GATHER','GENTLE','GHOST','GIANT','GIFT','GINGER','GLASS','GLOBE','GLORY','GOLDEN','GRAPE','GRAPH','GRASS','GRAVITY','GREEN','GRILL','GROUND','GUITAR','HAMMER','HANDLE','HARBOR','HARVEST','HAZEL','HEALTH','HEART','HEATER','HEIGHT','HELMET','HERO','HIDDEN','HIGHER','HOCKEY','HONEY','HORSE','HOSPITAL','HOTEL','HOUSE','HUNTER','ICEBERG','IDEA','IMAGE','IMPACT','INCOME','INDEX','INSECT','ISLAND','JACKET','JELLY','JEWEL','JOB','JOIN','JUDGE','JUICE','JUNGLE','KAYAK','KETTLE','KEYBOARD','KITCHEN','KNIGHT','LABEL','LADDER','LAGOON','LANTERN','LASER','LAUNCH','LAWYER','LEADER','LEAF','LEGEND','LEMON','LETTER','LIBRARY','LIGHT','LION','LIQUID','LITTLE','LIZARD','LOCKER','LOGIC','LOTION','LUMBER','LUNCH','MACHINE','MAGNET','MARBLE','MARKET','MASTER','MATRIX','MEDAL','MEDICINE','MEMORY','METAL','METHOD','MIDDLE','MINERAL','MIRROR','MOBILE','MODEL','MONKEY','MOON','MORNING','MOTHER','MOTION','MOUNTAIN','MOVIE','MUSEUM','MUSIC','MYSTERY','NATION','NEBULA','NEEDLE','NEON','NERVE','NEST','NEWSPAPER','NICKEL','NIGHT','NOBLE','NOODLE','NORTH','NUMBER','OBJECT','OCEAN','OFFICE','ORANGE','ORBIT','OXYGEN','PAINT','PALACE','PANCAKE','PAPER','PARADE','PARK','PARTNER','PASTA','PATIENT','PEACH','PEANUT','PENCIL','PEOPLE','PEPPER','PETAL','PHANTOM','PHONE','PHOTO','PIANO','PICNIC','PICTURE','PILLOW','PIRATE','PITCH','PIZZA','PLANET','PLASTIC','PLATE','PLAYER','POCKET','POINT','POLAR','POND','PORTAL','POWDER','PRAIRIE','PRESENT','PRINTER','PRISON','PROJECT','PULSE','PUZZLE','QUARTZ','QUEEN','QUICK','QUIET','RABBIT','RADIO','RAINBOW','RANCH','RANDOM','READER','REASON','RECORD','REFLEX','REGION','REMOTE','REPAIR','RESCUE','RESORT','RIBBON','RIVER','ROCKET','ROLLER','ROOF','ROOM','ROUTER','RUBBER','SADDLE','SALAD','SALMON','SANDWICH','SATURN','SAUCE','SCHOOL','SCIENCE','SCREEN','SCRIPT','SEASON','SECRET','SHADOW','SHELTER','SHIELD','SHOE','SIGNAL','SILVER','SINGER','SKETCH','SKIING','SLEEP','SLEEVES','SLIDER','SMOKE','SNACK','SNOW','SOCCER','SODIUM','SOLAR','SPARK','SPIDER','SPIRIT','SPLASH','SPRING','SQUARE','STADIUM','STAPLE','STAR','STATION','STEAM','STEEL','STONE','STORM','STORY','STREET','STRING','STUDENT','SUGAR','SUMMER','SUNSET','SURGERY','SWITCH','TABLE','TABLET','TARGET','TEMPLE','TENNIS','THEORY','THUNDER','TIGER','TIMBER','TOAST','TOKEN','TOMATO','TONGUE','TORCH','TOWER','TRACK','TRAIL','TRAIN','TREASURE','TROPHY','TUNNEL','TURTLE','UMBRELLA','UPDATE','VALLEY','VELVET','VIDEO','VILLAGE','VIOLET','VISION','VOYAGE','WALLET','WALNUT','WATER','WEALTH','WEATHER','WINDOW','WINTER','WIZARD','WOOD','WORKER','WORLD','WRENCH','WRITER','YELLOW','ZEBRA','ZEPHYR','ZODIAC'];
+function loadEnglishCpuWords() {
+  const curated = [...new Set([...THEMES.flatMap(t => t.words), ...GENERAL_CPU_WORDS])].filter(w => /^[A-Z]{1,12}$/.test(w));
+  try {
+    const imported = require('word-list');
+    const wordListPath = imported.default || imported;
+    const text = fs.readFileSync(wordListPath, 'utf8');
+    const broad = text
+      .split(/\r?\n/)
+      .map(w => w.trim().toUpperCase())
+      .filter(w => /^[A-Z]{1,12}$/.test(w))
+      .sort(() => Math.random() - 0.5);
+    return [...new Set([...curated, ...broad])];
+  } catch (err) {
+    console.warn('Word list package was not available; CPU players are using the curated fallback dictionary.');
+    return curated;
+  }
+}
+
+const ALL_CPU_WORDS = loadEnglishCpuWords();
+const CPU_NAMES = ['Copper Bot', 'Brass Bot', 'Hazel CPU', 'Ivy CPU', 'Gearmind', 'Oak Bot'];
 
 function randomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -37,6 +73,10 @@ function shuffle(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+function rand(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function makeDeck() {
@@ -57,9 +97,7 @@ function makeDeck() {
 
   const deck = [];
   for (const card of templates) {
-    for (let i = 0; i < card.count; i++) {
-      deck.push({ ...card, id: `${card.code}-${i + 1}` });
-    }
+    for (let i = 0; i < card.count; i++) deck.push({ ...card, id: `${card.code}-${i + 1}` });
   }
   return shuffle(deck);
 }
@@ -68,38 +106,64 @@ function cleanName(name) {
   return String(name || 'Player').trim().replace(/\s+/g, ' ').slice(0, 24) || 'Player';
 }
 
+function cleanAvatarData(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.length > 180000) return null;
+  if (!/^data:image\/(png|jpeg|jpg|webp);base64,[a-z0-9+/=]+$/i.test(raw)) return null;
+  return raw;
+}
+
 function cleanToken(token) {
   const raw = String(token || '').trim();
   if (/^[a-zA-Z0-9_-]{8,80}$/.test(raw)) return raw;
   return `guest_${Math.random().toString(36).slice(2, 14)}`;
 }
 
-function newPlayer(socketId, name, token, isHost = false) {
+function newPlayer(socketId, name, token, isHost = false, flags = {}) {
   return {
     id: token,
     token,
     socketId,
     name: cleanName(name),
-    connected: true,
+    connected: flags.isCpu || flags.isLocal ? true : true,
     isHost,
+    isCpu: !!flags.isCpu,
+    isLocal: !!flags.isLocal,
+    cpuDifficulty: flags.cpuDifficulty || 'medium',
     score: 0,
     ready: false,
     slots: null,
     word: '',
-    lastAction: ''
+    lastAction: '',
+    memory: {},
+    avatar: flags.avatar || ''
+  };
+}
+
+function defaultSettings() {
+  return {
+    turnTimerSec: 0,
+    useThemes: false,
+    themeMode: 'random',
+    themeId: 'medical',
+    sharedDevice: false,
+    manualReveal: false,
+    aiEnabled: false,
+    cpuDifficulty: 'medium'
   };
 }
 
 function newRoom(hostSocketId, hostName, hostToken) {
   const code = randomCode();
   const hostPlayer = newPlayer(hostSocketId, hostName, hostToken, true);
-
   const room = {
     code,
     createdAt: Date.now(),
     hostId: hostPlayer.id,
     status: 'lobby',
-    settings: { turnTimerSec: 0 },
+    settings: defaultSettings(),
+    currentTheme: null,
     turnEndsAt: null,
     players: [hostPlayer],
     deck: makeDeck(),
@@ -111,51 +175,40 @@ function newRoom(hostSocketId, hostName, hostToken) {
     additionalTurnOnMiss: false,
     awaitingExpose: null,
     log: [`Room ${code} created.`],
-    endedReason: ''
+    endedReason: '',
+    aiTimer: null,
+    aiSerial: 0
   };
-
   rooms.set(code, room);
   return room;
 }
 
 function getRoomOfSocket(socketId) {
-  for (const room of rooms.values()) {
-    if (room.players.some(p => p.socketId === socketId)) return room;
-  }
+  for (const room of rooms.values()) if (room.players.some(p => p.socketId === socketId)) return room;
   return null;
 }
 
-function getPlayer(room, playerId) {
-  return room.players.find(p => p.id === playerId);
-}
-
-function getPlayerByToken(room, token) {
-  return room.players.find(p => p.token === token);
-}
-
-function activePlayer(room) {
-  return room.players[room.turnIndex];
-}
+function getPlayer(room, playerId) { return room.players.find(p => p.id === playerId); }
+function getPlayerByToken(room, token) { return room.players.find(p => p.token === token); }
+function socketPlayer(room, socket) { return room.players.find(p => p.socketId === socket.id); }
+function activePlayer(room) { return room.players[room.turnIndex]; }
 
 function addLog(room, message) {
   room.log.unshift(message);
-  room.log = room.log.slice(0, 100);
+  room.log = room.log.slice(0, 120);
 }
 
 function hiddenCount(player) {
   if (!player.slots) return TRAY_SIZE;
   return player.slots.filter(s => !s.revealed).length;
 }
-
-function allExposed(player) {
-  return player.slots && player.slots.every(s => s.revealed);
-}
+function allExposed(player) { return player.slots && player.slots.every(s => s.revealed); }
+function playablePlayers(room) { return room.players.filter(p => p.slots && !allExposed(p)); }
 
 function findLeftPlayer(room, playerId) {
   const idx = room.players.findIndex(p => p.id === playerId);
   return room.players[(idx + 1) % room.players.length];
 }
-
 function findRightPlayer(room, playerId) {
   const idx = room.players.findIndex(p => p.id === playerId);
   return room.players[(idx - 1 + room.players.length) % room.players.length];
@@ -179,10 +232,7 @@ function setTurnTimer(room) {
 }
 
 function startTurn(room, samePlayer = false) {
-  if (!samePlayer) {
-    room.turnIndex = room.turnIndex % room.players.length;
-  }
-
+  if (!samePlayer) room.turnIndex = room.turnIndex % room.players.length;
   room.multiplier = 1;
   room.firstGuessAvailable = true;
   room.additionalTurnOnMiss = false;
@@ -190,7 +240,7 @@ function startTurn(room, samePlayer = false) {
 
   const player = activePlayer(room);
   const card = drawCard(room);
-  if (!card) {
+  if (!card || !player) {
     addLog(room, 'No activity card was available.');
     return;
   }
@@ -201,47 +251,20 @@ function startTurn(room, samePlayer = false) {
 }
 
 function applyCard(room, player, card) {
-  if (card.code === 'ADDITIONAL') {
-    room.additionalTurnOnMiss = true;
-    return;
-  }
+  if (card.code === 'ADDITIONAL') { room.additionalTurnOnMiss = true; return; }
 
   if (card.code === 'SELF_DOT') {
     const choices = hiddenIndices(player, '.', true);
-    if (choices.length === 0) {
-      addLog(room, `${player.name} has no hidden dot to expose, so the card is ignored.`);
-      return;
-    }
-    room.awaitingExpose = {
-      type: 'card',
-      playerId: player.id,
-      byPlayerId: null,
-      scoringPlayerId: null,
-      onlyDot: true,
-      symbol: '.',
-      allowedIndices: choices,
-      message: 'Expose one of your hidden dots. No one scores.'
-    };
+    if (choices.length === 0) return addLog(room, `${player.name} has no hidden dot to expose, so the card is ignored.`);
+    room.awaitingExpose = { type: 'card', playerId: player.id, byPlayerId: null, scoringPlayerId: null, onlyDot: true, symbol: '.', allowedIndices: choices, message: 'Expose one of your hidden dots. No one scores.' };
     return;
   }
 
   if (card.code === 'LEFT_EXPOSE' || card.code === 'RIGHT_EXPOSE') {
     const target = card.code === 'LEFT_EXPOSE' ? findLeftPlayer(room, player.id) : findRightPlayer(room, player.id);
     const choices = hiddenIndices(target, null, false);
-    if (choices.length === 0) {
-      addLog(room, `${target.name} has nothing hidden to expose, so the card is ignored.`);
-      return;
-    }
-    room.awaitingExpose = {
-      type: 'card',
-      playerId: target.id,
-      byPlayerId: player.id,
-      scoringPlayerId: player.id,
-      onlyDot: false,
-      symbol: null,
-      allowedIndices: choices,
-      message: `${target.name} must expose one hidden letter or dot. ${player.name} scores its value.`
-    };
+    if (choices.length === 0) return addLog(room, `${target.name} has nothing hidden to expose, so the card is ignored.`);
+    room.awaitingExpose = { type: 'card', playerId: target.id, byPlayerId: player.id, scoringPlayerId: player.id, onlyDot: false, symbol: null, allowedIndices: choices, message: `${target.name} must expose one hidden letter or dot. ${player.name} scores its value.` };
     return;
   }
 
@@ -256,7 +279,7 @@ function applyCard(room, player, card) {
 }
 
 function hiddenIndices(player, symbol = null, onlyDot = false) {
-  if (!player.slots) return [];
+  if (!player?.slots) return [];
   const normalized = normalizeSymbol(symbol);
   const result = [];
   for (let i = 0; i < player.slots.length; i++) {
@@ -271,31 +294,33 @@ function hiddenIndices(player, symbol = null, onlyDot = false) {
 
 function normalizeSymbol(input) {
   const value = String(input || '').trim().toUpperCase();
-  if (value === '.' || value === 'DOT' || value === 'BLANK') return '.';
+  if (value === '.' || value === 'DOT' || value === 'BLANK' || value === '•') return '.';
   if (/^[A-Z]$/.test(value)) return value;
   return '';
 }
 
-function slotValue(index) {
-  return SLOT_VALUES[index] || 0;
-}
+function slotValue(index) { return SLOT_VALUES[index] || 0; }
 
 function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1) {
+  if (!target?.slots) return { ok: false, points: 0 };
   const slot = target.slots[index];
   if (!slot || slot.revealed) return { ok: false, points: 0 };
 
   slot.revealed = true;
   const base = slotValue(index);
   let points = 0;
+  let scorerName = null;
 
   if (scoringPlayerId) {
     points = base * multiplier;
     const scorer = getPlayer(room, scoringPlayerId);
-    if (scorer) scorer.score += points;
+    if (scorer) {
+      scorer.score += points;
+      scorerName = scorer.name;
+    }
   }
 
   const visible = slot.ch === '.' ? 'dot' : slot.ch;
-  const scorerName = scoringPlayerId ? getPlayer(room, scoringPlayerId)?.name : null;
   if (scorerName) {
     const multText = multiplier > 1 ? ` x${multiplier}` : '';
     addLog(room, `${target.name} exposed ${visible} in slot ${index + 1}. ${scorerName} scored ${base}${multText} = ${points}.`);
@@ -303,7 +328,7 @@ function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1
     addLog(room, `${target.name} exposed ${visible} in slot ${index + 1}. No points scored.`);
   }
 
-  if (reason === 'guess' && allExposed(target) && scoringPlayerId) {
+  if ((reason === 'guess' || reason === 'manual') && allExposed(target) && scoringPlayerId) {
     const scorer = getPlayer(room, scoringPlayerId);
     if (scorer) scorer.score += 50;
     addLog(room, `${scorerName} earned a 50 point bonus for exposing ${target.name}'s final hidden space.`);
@@ -317,7 +342,6 @@ function checkGameEnd(room) {
   if (room.status !== 'playing') return;
   const done = room.players.every(p => p.slots && p.slots.every(s => s.revealed));
   if (!done) return;
-
   room.status = 'ended';
   room.turnEndsAt = null;
   const sorted = [...room.players].sort((a, b) => b.score - a.score);
@@ -327,50 +351,48 @@ function checkGameEnd(room) {
   addLog(room, room.endedReason);
 }
 
-function advanceTurnAfterMiss(room) {
-  const player = activePlayer(room);
-  if (room.additionalTurnOnMiss) {
-    addLog(room, `${player.name}'s additional-turn card activates. They draw another card and continue.`);
-    startTurn(room, true);
-    return;
-  }
-
-  room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
-  startTurn(room, false);
-}
-
 function nextConnectedTurnIndex(room, fromIndex) {
   if (room.players.length === 0) return 0;
   for (let step = 1; step <= room.players.length; step++) {
     const idx = (fromIndex + step) % room.players.length;
-    if (room.players[idx].connected) return idx;
+    const p = room.players[idx];
+    if ((p.connected || p.isCpu || p.isLocal) && p.slots && !allExposed(p)) return idx;
+  }
+  for (let step = 1; step <= room.players.length; step++) {
+    const idx = (fromIndex + step) % room.players.length;
+    const p = room.players[idx];
+    if (p.connected || p.isCpu || p.isLocal) return idx;
   }
   return (fromIndex + 1) % room.players.length;
 }
 
-function makePublicSlots(player) {
-  if (!player.slots) return [];
-  return player.slots.map((slot, index) => ({
-    index,
-    value: slotValue(index),
-    revealed: !!slot.revealed,
-    ch: slot.revealed ? slot.ch : '',
-    hidden: !slot.revealed
-  }));
+function advanceTurnAfterMiss(room) {
+  const player = activePlayer(room);
+  if (room.additionalTurnOnMiss) {
+    addLog(room, `${player?.name || 'The player'}'s additional-turn card activates. They draw another card and continue.`);
+    startTurn(room, true);
+    return;
+  }
+  room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
+  startTurn(room, false);
 }
 
+function makePublicSlots(player) {
+  if (!player.slots) return [];
+  return player.slots.map((slot, index) => ({ index, value: slotValue(index), revealed: !!slot.revealed, ch: slot.revealed ? slot.ch : '', hidden: !slot.revealed }));
+}
 function makePrivateSlots(player) {
   if (!player.slots) return [];
-  return player.slots.map((slot, index) => ({
-    index,
-    value: slotValue(index),
-    revealed: !!slot.revealed,
-    ch: slot.ch
-  }));
+  return player.slots.map((slot, index) => ({ index, value: slotValue(index), revealed: !!slot.revealed, ch: slot.ch }));
+}
+
+function publicTheme(room) {
+  return room.currentTheme ? { id: room.currentTheme.id, name: room.currentTheme.name, emoji: room.currentTheme.emoji, examples: room.currentTheme.examples } : null;
 }
 
 function publicState(room, viewerId) {
   const active = room.status === 'playing' ? activePlayer(room) : null;
+  const viewer = getPlayer(room, viewerId);
   return {
     code: room.code,
     status: room.status,
@@ -385,23 +407,25 @@ function publicState(room, viewerId) {
     firstGuessAvailable: room.firstGuessAvailable,
     additionalTurnOnMiss: room.additionalTurnOnMiss,
     settings: room.settings,
+    themes: THEMES.map(t => ({ id: t.id, name: t.name, emoji: t.emoji, examples: t.examples })),
+    currentTheme: publicTheme(room),
     turnEndsAt: room.turnEndsAt,
-    awaitingExpose: room.awaitingExpose ? {
-      ...room.awaitingExpose,
-      allowedIndices: room.awaitingExpose.playerId === viewerId ? room.awaitingExpose.allowedIndices : []
-    } : null,
+    awaitingExpose: room.awaitingExpose ? { ...room.awaitingExpose, allowedIndices: canControlPlayer(room, viewer, room.awaitingExpose.playerId) ? room.awaitingExpose.allowedIndices : [] } : null,
     players: room.players.map(p => ({
       id: p.id,
       name: p.name,
-      connected: p.connected,
+      connected: p.connected || p.isCpu || p.isLocal,
       isHost: p.isHost,
+      isCpu: p.isCpu,
+      isLocal: p.isLocal,
+      cpuDifficulty: p.cpuDifficulty,
+      avatar: p.avatar || '',
       ready: p.ready,
       score: p.score,
       hiddenCount: hiddenCount(p),
       allExposed: p.slots ? allExposed(p) : false,
       publicSlots: makePublicSlots(p),
       privateSlots: p.id === viewerId ? makePrivateSlots(p) : null,
-      wordLength: p.word ? p.word.length : 0
     })),
     log: room.log,
     endedReason: room.endedReason
@@ -410,27 +434,20 @@ function publicState(room, viewerId) {
 
 function broadcast(room) {
   for (const p of room.players) {
-    if (p.connected && p.socketId) {
-      io.to(p.socketId).emit('state', publicState(room, p.id));
-    }
+    if (p.connected && p.socketId) io.to(p.socketId).emit('state', publicState(room, p.id));
   }
+  maybeScheduleAi(room);
 }
 
-function emitError(socket, message) {
-  socket.emit('errorMessage', message);
-}
+function emitError(socket, message) { socket.emit('errorMessage', message); }
 
 function validateTray(wordRaw, leftDotsRaw) {
-  const word = String(wordRaw || '').trim().toUpperCase();
-  if (!/^[A-Z]{1,12}$/.test(word)) {
-    return { ok: false, message: 'Use a secret word from 1 to 12 letters, letters only.' };
-  }
+  const word = String(wordRaw || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if (!/^[A-Z]{1,12}$/.test(word)) return { ok: false, message: 'Use a secret word from 1 to 12 letters, letters only.' };
   const dotCount = TRAY_SIZE - word.length;
   let leftDots = Number.parseInt(leftDotsRaw, 10);
   if (Number.isNaN(leftDots)) leftDots = 0;
-  if (leftDots < 0 || leftDots > dotCount) {
-    return { ok: false, message: `Left dots must be between 0 and ${dotCount}.` };
-  }
+  if (leftDots < 0 || leftDots > dotCount) return { ok: false, message: `Left dots must be between 0 and ${dotCount}.` };
   const rightDots = dotCount - leftDots;
   const slots = [];
   for (let i = 0; i < leftDots; i++) slots.push({ ch: '.', revealed: false });
@@ -439,13 +456,45 @@ function validateTray(wordRaw, leftDotsRaw) {
   return { ok: true, word, slots, leftDots, rightDots };
 }
 
+function applySecret(room, player, word, leftDots, sourceName = player.name) {
+  const result = validateTray(word, leftDots);
+  if (!result.ok) return result;
+  player.word = result.word;
+  player.slots = result.slots;
+  player.ready = true;
+  addLog(room, `${sourceName} locked in ${player.name}'s secret tray.`);
+  return { ok: true };
+}
+
+function selectCurrentTheme(room) {
+  if (!room.settings.useThemes) return null;
+  if (room.settings.themeMode === 'host' && THEME_MAP.has(room.settings.themeId)) return THEME_MAP.get(room.settings.themeId);
+  return rand(THEMES);
+}
+
+function pickCpuWord(room) {
+  // CPU secret words stay playable/fair. The broad word-list is used for guessing/solving,
+  // but CPU players pick their own hidden words from the round theme or the curated common list.
+  const pool = room.currentTheme?.words?.length ? room.currentTheme.words : GENERAL_CPU_WORDS;
+  const available = pool.filter(w => /^[A-Z]{3,12}$/.test(w));
+  return rand(available.length ? available : GENERAL_CPU_WORDS);
+}
+
+function autoAssignCpuSecret(room, cpu) {
+  const word = pickCpuWord(room);
+  const leftDots = Math.floor(Math.random() * (TRAY_SIZE - word.length + 1));
+  applySecret(room, cpu, word, leftDots, cpu.name);
+}
+
 function startIfReady(room) {
   if (room.status !== 'setup') return;
+  room.players.filter(p => p.isCpu && !p.ready).forEach(cpu => autoAssignCpuSecret(room, cpu));
   if (room.players.length >= MIN_PLAYERS && room.players.every(p => p.ready && p.slots)) {
     room.status = 'playing';
-    room.turnIndex = room.players.findIndex(p => p.connected);
+    room.turnIndex = room.players.findIndex(p => p.connected || p.isCpu || p.isLocal);
     if (room.turnIndex < 0) room.turnIndex = 0;
     addLog(room, 'All secret trays are ready. The game begins.');
+    if (room.currentTheme) addLog(room, `Round theme: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
     startTurn(room, false);
   }
 }
@@ -460,7 +509,7 @@ function attachSocketToPlayer(room, player, socket, name) {
 function transferHostIfNeeded(room) {
   const host = getPlayer(room, room.hostId);
   if (host) return;
-  const nextHost = room.players[0];
+  const nextHost = room.players.find(p => !p.isCpu && !p.isLocal) || room.players[0];
   if (!nextHost) return;
   nextHost.isHost = true;
   room.hostId = nextHost.id;
@@ -479,6 +528,346 @@ function removePlayer(room, playerId, reason = 'removed') {
   return removed;
 }
 
+function canControlPlayer(room, self, playerId) {
+  if (!self) return false;
+  if (self.id === playerId) return true;
+  return !!(room.settings.sharedDevice && self.id === room.hostId && getPlayer(room, playerId) && !getPlayer(room, playerId).isCpu);
+}
+
+function resolveActor(room, socket, requestedPlayerId) {
+  const self = socketPlayer(room, socket);
+  if (!self) return null;
+  if (requestedPlayerId && canControlPlayer(room, self, requestedPlayerId)) return getPlayer(room, requestedPlayerId);
+  return self;
+}
+
+function rememberCpuMiss(cpu, targetId, symbol) {
+  if (!cpu?.isCpu) return;
+  cpu.memory[targetId] = cpu.memory[targetId] || { misses: [] };
+  if (!cpu.memory[targetId].misses.includes(symbol)) cpu.memory[targetId].misses.push(symbol);
+}
+
+function askSymbolInternal(room, asker, target, symbol) {
+  if (room.awaitingExpose) return { ok: false, message: 'Wait for the pending exposure choice first.' };
+  if (!asker || activePlayer(room)?.id !== asker.id) return { ok: false, message: 'It is not your turn.' };
+  if (!target || target.id === asker.id) return { ok: false, message: 'Choose a valid opponent.' };
+  if (!target.slots) return { ok: false, message: 'That opponent has no tray.' };
+
+  const normalized = normalizeSymbol(symbol);
+  if (!normalized) return { ok: false, message: 'Ask for one letter, or ask for a dot.' };
+
+  const matches = hiddenIndices(target, normalized, false);
+  if (matches.length === 0) {
+    addLog(room, `${asker.name} asked ${target.name} for ${normalized === '.' ? 'a dot' : normalized}. No match.`);
+    rememberCpuMiss(asker, target.id, normalized);
+    room.firstGuessAvailable = false;
+    if (normalized === '.') {
+      asker.score -= 50;
+      addLog(room, `${asker.name} loses 50 points for asking for a dot from a player with no hidden dot.`);
+    }
+    advanceTurnAfterMiss(room);
+    return { ok: true };
+  }
+
+  if (matches.length === 1) {
+    const mult = room.firstGuessAvailable ? room.multiplier : 1;
+    revealSlot(room, target, matches[0], asker.id, 'guess', mult);
+    room.firstGuessAvailable = false;
+    if (room.status === 'playing') addLog(room, `${asker.name} guessed correctly and continues.`);
+    setTurnTimer(room);
+    return { ok: true };
+  }
+
+  room.awaitingExpose = {
+    type: 'guess',
+    playerId: target.id,
+    byPlayerId: asker.id,
+    scoringPlayerId: asker.id,
+    onlyDot: normalized === '.',
+    symbol: normalized,
+    allowedIndices: matches,
+    message: `${target.name}, choose one hidden ${normalized === '.' ? 'dot' : normalized} to expose.`
+  };
+  addLog(room, `${asker.name} asked ${target.name} for ${normalized === '.' ? 'a dot' : normalized}. ${target.name} must choose one to expose.`);
+  setTurnTimer(room);
+  return { ok: true };
+}
+
+function chooseExposeInternal(room, target, idx) {
+  const pending = room.awaitingExpose;
+  if (!pending) return { ok: false, message: 'There is no exposure choice pending.' };
+  if (!target || pending.playerId !== target.id) return { ok: false, message: 'This exposure choice is not yours.' };
+  if (!pending.allowedIndices.includes(idx)) return { ok: false, message: 'That slot is not allowed for this exposure.' };
+
+  const mult = pending.type === 'guess' && room.firstGuessAvailable ? room.multiplier : 1;
+  revealSlot(room, target, idx, pending.scoringPlayerId, pending.type === 'guess' ? 'guess' : 'card', mult);
+
+  if (pending.type === 'guess') {
+    room.firstGuessAvailable = false;
+    if (room.status === 'playing') {
+      const asker = getPlayer(room, pending.byPlayerId);
+      addLog(room, `${asker?.name || 'The guesser'} guessed correctly and continues.`);
+    }
+  }
+
+  room.awaitingExpose = null;
+  setTurnTimer(room);
+  return { ok: true };
+}
+
+function manualExposeInternal(room, target, idx, scorerId) {
+  if (!room.settings.manualReveal) return { ok: false, message: 'Click-to-expose mode is turned off.' };
+  if (!target?.slots) return { ok: false, message: 'That player has no tray.' };
+  const slot = target.slots[idx];
+  if (!slot || slot.revealed) return { ok: false, message: 'Choose a hidden slot.' };
+  const scorer = scorerId && scorerId !== target.id ? scorerId : null;
+  revealSlot(room, target, idx, scorer, 'manual', 1);
+  if (room.status === 'playing') setTurnTimer(room);
+  return { ok: true };
+}
+
+function visiblePattern(player) {
+  return (player.slots || []).map(s => s.revealed ? s.ch : '_').join('');
+}
+
+
+function cpuDifficulty(cpu, room) {
+  return cpu.cpuDifficulty || room.settings.cpuDifficulty || 'medium';
+}
+
+function cpuWordPool(room, diff) {
+  const themed = room.currentTheme?.words || [];
+  if (diff === 'easy') return themed.length ? themed : GENERAL_CPU_WORDS.slice(0, 120);
+  if (diff === 'medium') return [...new Set([...themed, ...GENERAL_CPU_WORDS])];
+  if (diff === 'hard') return [...new Set([...themed, ...GENERAL_CPU_WORDS, ...ALL_CPU_WORDS.slice(0, 900)])];
+  return [...new Set([...themed, ...GENERAL_CPU_WORDS, ...ALL_CPU_WORDS])];
+}
+
+function revealedPattern(target) {
+  return (target.slots || []).map(s => s.revealed ? s.ch : '_').join('');
+}
+
+function cpuCandidatePlacements(cpu, target, word) {
+  if (!target?.slots || !/^[A-Z]{1,12}$/.test(word)) return [];
+  const misses = new Set(cpu.memory[target.id]?.misses || []);
+  const placements = [];
+  for (let start = 0; start <= TRAY_SIZE - word.length; start++) {
+    const tray = [];
+    let ok = true;
+    const hiddenLetters = new Set();
+    let hiddenDots = 0;
+    for (let i = 0; i < TRAY_SIZE; i++) {
+      const ch = (i >= start && i < start + word.length) ? word[i - start] : '.';
+      tray.push(ch);
+      const publicSlot = target.slots[i];
+      if (publicSlot.revealed && publicSlot.ch !== ch) { ok = false; break; }
+      if (!publicSlot.revealed) {
+        if (ch === '.') hiddenDots++;
+        else hiddenLetters.add(ch);
+      }
+    }
+    if (!ok) continue;
+    for (const miss of misses) {
+      if (miss === '.' && hiddenDots > 0) { ok = false; break; }
+      if (miss !== '.' && hiddenLetters.has(miss)) { ok = false; break; }
+    }
+    if (ok) placements.push({ start, tray });
+  }
+  return placements;
+}
+
+function cpuCandidates(room, cpu, target, cap = 9999) {
+  const diff = cpuDifficulty(cpu, room);
+  const pool = cpuWordPool(room, diff);
+  const out = [];
+  for (const word of pool) {
+    const placements = cpuCandidatePlacements(cpu, target, word);
+    if (placements.length) out.push({ word, placements });
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+function chooseCpuTarget(room, cpu) {
+  const candidates = room.players.filter(p => p.id !== cpu.id && p.slots && !allExposed(p));
+  if (!candidates.length) return null;
+  const diff = cpuDifficulty(cpu, room);
+  if (diff === 'easy') return rand(candidates);
+  if (diff === 'medium') return [...candidates].sort((a, b) => hiddenCount(b) - hiddenCount(a))[0];
+
+  const scored = candidates.map(target => {
+    const possible = cpuCandidates(room, cpu, target, diff === 'genius' ? 700 : 260).length;
+    const revealed = TRAY_SIZE - hiddenCount(target);
+    const scarcity = possible ? Math.max(0, 90 - Math.min(possible, 90)) / 9 : 0;
+    return { target, score: revealed * 1.8 + scarcity + hiddenCount(target) * 0.35 };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0]?.target || rand(candidates);
+}
+
+function chooseCpuSymbol(room, cpu, target) {
+  const diff = cpuDifficulty(cpu, room);
+  const misses = cpu.memory[target.id]?.misses || [];
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+  if (diff === 'easy') {
+    const pool = letters.filter(l => !misses.includes(l));
+    return Math.random() < 0.06 ? '.' : rand(pool.length ? pool : letters);
+  }
+
+  const revealedLetters = new Set((target.slots || []).filter(s => s.revealed && /^[A-Z]$/.test(s.ch)).map(s => s.ch));
+  const avoidBasic = new Set([...misses, ...revealedLetters]);
+
+  if (diff === 'medium') {
+    const frequency = 'ETAOINSHRDLUCMFYWGPBVKXQJZ'.split('');
+    return frequency.find(l => !avoidBasic.has(l)) || letters.find(l => !misses.includes(l)) || rand(letters);
+  }
+
+  const candidates = cpuCandidates(room, cpu, target, diff === 'genius' ? 900 : 320);
+  if (candidates.length) {
+    const counts = Object.fromEntries(letters.map(l => [l, 0]));
+    let dotCount = 0;
+    for (const cand of candidates) {
+      const possibleHiddenLetters = new Set();
+      let hasHiddenDot = false;
+      for (const placement of cand.placements) {
+        placement.tray.forEach((ch, idx) => {
+          if (target.slots[idx]?.revealed) return;
+          if (ch === '.') hasHiddenDot = true;
+          else possibleHiddenLetters.add(ch);
+        });
+      }
+      for (const l of possibleHiddenLetters) counts[l] += 1;
+      if (hasHiddenDot) dotCount += 1;
+    }
+    const total = Math.max(1, candidates.length);
+    const ranked = Object.entries(counts)
+      .filter(([l, count]) => count > 0 && !misses.includes(l))
+      .map(([l, count]) => {
+        const hitRate = count / total;
+        const infoBonus = diff === 'genius' ? (1 - Math.abs(hitRate - 0.62)) : 1;
+        return [l, count * infoBonus];
+      })
+      .sort((a, b) => b[1] - a[1]);
+    const dotRate = dotCount / total;
+    if (diff === 'genius' && !misses.includes('.') && dotRate > 0.92 && hiddenCount(target) <= 5) return '.';
+    if (ranked[0]) return ranked[0][0];
+  }
+
+  const frequency = 'ETAOINSHRDLUCMFYWGPBVKXQJZ'.split('');
+  return frequency.find(l => !avoidBasic.has(l)) || letters.find(l => !misses.includes(l)) || rand(letters);
+}
+
+function cpuMaybeFullGuess(room, cpu, target) {
+  const diff = cpuDifficulty(cpu, room);
+  if (diff === 'easy' || diff === 'medium') return false;
+  const revealedLetters = revealedPattern(target).replace(/[^A-Z]/g, '');
+  if (revealedLetters.length < (diff === 'genius' ? 2 : 3)) return false;
+  const candidates = cpuCandidates(room, cpu, target, diff === 'genius' ? 900 : 320);
+  if (!candidates.length) return false;
+
+  if (candidates.length === 1 && hiddenCount(target) <= (diff === 'genius' ? 5 : 3)) {
+    const chance = diff === 'genius' ? 0.92 : 0.62;
+    if (Math.random() < chance) {
+      guessFullInternal(room, cpu, target, candidates[0].word, false);
+      return true;
+    }
+  }
+  if (diff === 'genius' && candidates.length <= 3 && hiddenCount(target) <= 2 && Math.random() < 0.55) {
+    guessFullInternal(room, cpu, target, candidates[0].word, false);
+    return true;
+  }
+  return false;
+}
+function cpuTakeAction(room) {
+  if (room.status !== 'playing') return;
+  const cpu = activePlayer(room);
+  if (!cpu?.isCpu || room.awaitingExpose) return;
+  const target = chooseCpuTarget(room, cpu);
+  if (!target) return advanceTurnAfterMiss(room);
+  if (cpuMaybeFullGuess(room, cpu, target)) return;
+  const symbol = chooseCpuSymbol(room, cpu, target);
+  askSymbolInternal(room, cpu, target, symbol);
+}
+
+function autoResolveCpuExpose(room) {
+  const pending = room.awaitingExpose;
+  if (!pending) return;
+  const target = getPlayer(room, pending.playerId);
+  if (!target?.isCpu) return;
+  const diff = cpuDifficulty(target, room);
+  let idx = rand(pending.allowedIndices);
+  if (diff === 'hard' || diff === 'genius') {
+    idx = [...pending.allowedIndices].sort((a, b) => SLOT_VALUES[a] - SLOT_VALUES[b])[0];
+  }
+  chooseExposeInternal(room, target, idx);
+}
+
+function maybeScheduleAi(room) {
+  if (room.status !== 'playing') return;
+  if (room.aiTimer) return;
+  const active = activePlayer(room);
+  const pendingTarget = room.awaitingExpose ? getPlayer(room, room.awaitingExpose.playerId) : null;
+  if (!active?.isCpu && !pendingTarget?.isCpu) return;
+  const serial = ++room.aiSerial;
+  const delay = pendingTarget?.isCpu ? 700 : 1150;
+  room.aiTimer = setTimeout(() => {
+    room.aiTimer = null;
+    if (serial !== room.aiSerial) return;
+    if (room.status !== 'playing') return;
+    if (room.awaitingExpose && getPlayer(room, room.awaitingExpose.playerId)?.isCpu) autoResolveCpuExpose(room);
+    else if (activePlayer(room)?.isCpu) cpuTakeAction(room);
+    broadcast(room);
+  }, delay);
+}
+
+function guessFullInternal(room, guesser, target, guess, interruptive) {
+  if (!guesser || !target || target.id === guesser.id) return { ok: false, message: 'Choose a valid opponent.' };
+  const isInterrupt = !!interruptive;
+  const active = activePlayer(room);
+  if (!isInterrupt && active?.id !== guesser.id) return { ok: false, message: 'Full guesses on your turn only, unless using interruptive guess.' };
+  if (isInterrupt && hiddenCount(target) < 5) return { ok: false, message: 'Interruptive guesses are only allowed when that opponent has 5 or more hidden spaces.' };
+  const raw = String(guess || '').trim().toUpperCase();
+  if (!raw) return { ok: false, message: 'Enter a full word or full tray pattern.' };
+  const normalizedFull = raw.replace(/DOT/g, '.').replace(/[^A-Z.]/g, '');
+  const fullPattern = target.slots.map(s => s.ch).join('');
+  const wordOnly = target.word;
+  const correct = normalizedFull === fullPattern || normalizedFull === wordOnly;
+
+  if (correct) {
+    target.slots.forEach(s => { s.revealed = true; });
+    guesser.score += isInterrupt ? 100 : 50;
+    addLog(room, `${guesser.name} correctly guessed ${target.name}'s ${normalizedFull === fullPattern ? 'full tray' : 'word'} and revealed it. +${isInterrupt ? 100 : 50} points.`);
+    checkGameEnd(room);
+    if (!isInterrupt && room.status === 'playing') {
+      addLog(room, `${guesser.name} continues after a correct full guess.`);
+      setTurnTimer(room);
+    }
+  } else {
+    guesser.score -= isInterrupt ? 50 : 100;
+    addLog(room, `${guesser.name} guessed ${target.name}'s word/tray incorrectly. -${isInterrupt ? 50 : 100} points.`);
+    if (!isInterrupt && active?.id === guesser.id) advanceTurnAfterMiss(room);
+  }
+  return { ok: true };
+}
+
+function makeCpuToken(room) {
+  let token;
+  do token = `cpu_${Math.random().toString(36).slice(2, 12)}`; while (getPlayer(room, token));
+  return token;
+}
+
+function nextCpuName(room) {
+  const used = new Set(room.players.map(p => p.name));
+  return CPU_NAMES.find(n => !used.has(n)) || `CPU ${room.players.filter(p => p.isCpu).length + 1}`;
+}
+
+function makeLocalToken(room) {
+  let token;
+  do token = `local_${Math.random().toString(36).slice(2, 12)}`; while (getPlayer(room, token));
+  return token;
+}
+
 io.on('connection', (socket) => {
   socket.on('createRoom', ({ name, token }) => {
     const safeToken = cleanToken(token);
@@ -493,7 +882,7 @@ io.on('connection', (socket) => {
     if (!room) return emitError(socket, 'Room not found. Check the room code.');
     const safeToken = cleanToken(token);
     const existing = getPlayerByToken(room, safeToken);
-    if (existing) {
+    if (existing && !existing.isCpu && !existing.isLocal) {
       attachSocketToPlayer(room, existing, socket, name);
       addLog(room, `${existing.name} rejoined the room.`);
       socket.emit('joined', { code: room.code, playerId: existing.id, token: safeToken });
@@ -517,29 +906,88 @@ io.on('connection', (socket) => {
     if (!room) return emitError(socket, 'Could not reconnect: room not found.');
     const safeToken = cleanToken(token);
     const player = getPlayerByToken(room, safeToken);
-    if (!player) return emitError(socket, 'Could not reconnect: player not found in that room.');
+    if (!player || player.isCpu || player.isLocal) return emitError(socket, 'Could not reconnect: player not found in that room.');
     attachSocketToPlayer(room, player, socket, name);
     addLog(room, `${player.name} reconnected.`);
     socket.emit('joined', { code: room.code, playerId: player.id, token: safeToken });
     broadcast(room);
   });
 
-  socket.on('setSettings', ({ turnTimerSec }) => {
+
+
+  socket.on('setAvatar', ({ playerId, avatar }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
-    if (room.hostId !== room.players.find(p => p.socketId === socket.id)?.id) return emitError(socket, 'Only the host can change settings.');
+    const self = socketPlayer(room, socket);
+    const targetId = playerId || self?.id;
+    if (!self || !canControlPlayer(room, self, targetId)) return emitError(socket, 'You cannot change that avatar.');
+    const target = getPlayer(room, targetId);
+    if (!target || target.isCpu) return emitError(socket, 'Choose a human/local player.');
+    const cleaned = cleanAvatarData(avatar);
+    if (cleaned === null) return emitError(socket, 'Avatar must be a small PNG, JPG, or WebP image.');
+    target.avatar = cleaned;
+    addLog(room, `${target.name} updated an avatar.`);
+    broadcast(room);
+  });
+
+  socket.on('setSettings', (incoming = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    const self = socketPlayer(room, socket);
+    if (room.hostId !== self?.id) return emitError(socket, 'Only the host can change settings.');
     if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'Settings can only be changed before or during setup.');
-    const value = Number.parseInt(turnTimerSec, 10);
-    if (!VALID_TIMERS.has(value)) return emitError(socket, 'Invalid timer value.');
-    room.settings.turnTimerSec = value;
-    addLog(room, `Turn timer set to ${value ? value + ' seconds' : 'off'}.`);
+
+    if ('turnTimerSec' in incoming) {
+      const value = Number.parseInt(incoming.turnTimerSec, 10);
+      if (!VALID_TIMERS.has(value)) return emitError(socket, 'Invalid timer value.');
+      room.settings.turnTimerSec = value;
+    }
+    if ('useThemes' in incoming) room.settings.useThemes = !!incoming.useThemes;
+    if ('themeMode' in incoming && ['random', 'host'].includes(incoming.themeMode)) room.settings.themeMode = incoming.themeMode;
+    if ('themeId' in incoming && THEME_MAP.has(incoming.themeId)) room.settings.themeId = incoming.themeId;
+    if ('sharedDevice' in incoming) room.settings.sharedDevice = !!incoming.sharedDevice;
+    if ('manualReveal' in incoming) room.settings.manualReveal = !!incoming.manualReveal;
+    if ('aiEnabled' in incoming) room.settings.aiEnabled = !!incoming.aiEnabled;
+    if ('cpuDifficulty' in incoming && CPU_DIFFICULTIES.has(incoming.cpuDifficulty)) room.settings.cpuDifficulty = incoming.cpuDifficulty;
+
+    addLog(room, 'Host updated game settings.');
+    broadcast(room);
+  });
+
+  socket.on('addCpu', () => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    const self = socketPlayer(room, socket);
+    if (room.hostId !== self?.id) return emitError(socket, 'Only the host can add CPU players.');
+    if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'CPU players can only be added before the game starts.');
+    if (room.players.length >= MAX_PLAYERS) return emitError(socket, 'That room is full.');
+    room.settings.aiEnabled = true;
+    const cpu = newPlayer(null, nextCpuName(room), makeCpuToken(room), false, { isCpu: true, cpuDifficulty: room.settings.cpuDifficulty });
+    room.players.push(cpu);
+    addLog(room, `${cpu.name} joined as an AI competitor.`);
+    if (room.status === 'setup') { autoAssignCpuSecret(room, cpu); startIfReady(room); }
+    broadcast(room);
+  });
+
+  socket.on('addLocalPlayer', ({ name }) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    const self = socketPlayer(room, socket);
+    if (room.hostId !== self?.id) return emitError(socket, 'Only the host can add local seats.');
+    if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'Local seats can only be added before the game starts.');
+    if (room.players.length >= MAX_PLAYERS) return emitError(socket, 'That room is full.');
+    room.settings.sharedDevice = true;
+    const safeName = cleanName(name || `Seat ${room.players.filter(p => p.isLocal).length + 2}`);
+    const local = newPlayer(null, safeName, makeLocalToken(room), false, { isLocal: true });
+    room.players.push(local);
+    addLog(room, `${local.name} was added as a local shared-device seat.`);
     broadcast(room);
   });
 
   socket.on('kickPlayer', ({ playerId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
-    const self = room.players.find(p => p.socketId === socket.id);
+    const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can remove players.');
     if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'Players can only be removed before the game starts.');
     if (playerId === self.id) return emitError(socket, 'The host cannot remove themselves.');
@@ -552,11 +1000,16 @@ io.on('connection', (socket) => {
   socket.on('startSetup', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
-    const self = room.players.find(p => p.socketId === socket.id);
+    const self = socketPlayer(room, socket);
     if (room.hostId !== self?.id) return emitError(socket, 'Only the host can start setup.');
-    if (room.players.length < MIN_PLAYERS) return emitError(socket, 'You need at least 2 players.');
+    if (room.players.length < MIN_PLAYERS) return emitError(socket, 'You need at least 2 players or one AI/local seat.');
     room.status = 'setup';
+    room.currentTheme = selectCurrentTheme(room);
+    room.players.forEach(p => { p.ready = false; p.slots = null; p.word = ''; p.score = 0; p.memory = {}; });
+    room.players.filter(p => p.isCpu).forEach(cpu => autoAssignCpuSecret(room, cpu));
     addLog(room, 'Secret word setup started.');
+    if (room.currentTheme) addLog(room, `Round theme selected: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
+    startIfReady(room);
     broadcast(room);
   });
 
@@ -564,139 +1017,107 @@ io.on('connection', (socket) => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
     if (room.status !== 'setup') return emitError(socket, 'Secret words can only be entered during setup.');
-    const player = room.players.find(p => p.socketId === socket.id);
-    const result = validateTray(word, leftDots);
+    const player = socketPlayer(room, socket);
+    if (!player) return emitError(socket, 'Player not found.');
+    const result = applySecret(room, player, word, leftDots, player.name);
     if (!result.ok) return emitError(socket, result.message);
-
-    player.word = result.word;
-    player.slots = result.slots;
-    player.ready = true;
-    addLog(room, `${player.name} locked in a secret tray.`);
     startIfReady(room);
     broadcast(room);
   });
 
-  socket.on('askSymbol', ({ targetId, symbol }) => {
+  socket.on('submitSecretForPlayer', ({ playerId, word, leftDots }) => {
     const room = getRoomOfSocket(socket.id);
-    if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
-    if (room.awaitingExpose) return emitError(socket, 'Wait for the pending exposure choice first.');
-    const asker = room.players.find(p => p.socketId === socket.id);
-    if (!asker || activePlayer(room)?.id !== asker.id) return emitError(socket, 'It is not your turn.');
-
-    const target = getPlayer(room, targetId);
-    if (!target || target.id === asker.id) return emitError(socket, 'Choose a valid opponent.');
-    if (!target.slots) return emitError(socket, 'That opponent has no tray.');
-
-    const normalized = normalizeSymbol(symbol);
-    if (!normalized) return emitError(socket, 'Ask for one letter, or ask for a dot.');
-
-    const matches = hiddenIndices(target, normalized, false);
-    if (matches.length === 0) {
-      addLog(room, `${asker.name} asked ${target.name} for ${normalized === '.' ? 'a dot' : normalized}. No match.`);
-      room.firstGuessAvailable = false;
-      if (normalized === '.') {
-        asker.score -= 50;
-        addLog(room, `${asker.name} loses 50 points for asking for a dot from a player with no hidden dot.`);
-      }
-      advanceTurnAfterMiss(room);
-      broadcast(room);
-      return;
-    }
-
-    if (matches.length === 1) {
-      const mult = room.firstGuessAvailable ? room.multiplier : 1;
-      revealSlot(room, target, matches[0], asker.id, 'guess', mult);
-      room.firstGuessAvailable = false;
-      if (room.status === 'playing') addLog(room, `${asker.name} guessed correctly and continues.`);
-      setTurnTimer(room);
-      broadcast(room);
-      return;
-    }
-
-    room.awaitingExpose = {
-      type: 'guess',
-      playerId: target.id,
-      byPlayerId: asker.id,
-      scoringPlayerId: asker.id,
-      onlyDot: normalized === '.',
-      symbol: normalized,
-      allowedIndices: matches,
-      message: `${target.name}, choose one hidden ${normalized === '.' ? 'dot' : normalized} to expose.`
-    };
-    addLog(room, `${asker.name} asked ${target.name} for ${normalized === '.' ? 'a dot' : normalized}. ${target.name} must choose one to expose.`);
-    setTurnTimer(room);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    if (room.status !== 'setup') return emitError(socket, 'Secret words can only be entered during setup.');
+    const self = socketPlayer(room, socket);
+    if (!self || !canControlPlayer(room, self, playerId)) return emitError(socket, 'You cannot set that player’s tray.');
+    const player = getPlayer(room, playerId);
+    if (!player || player.isCpu) return emitError(socket, 'Choose a local/non-CPU player.');
+    const result = applySecret(room, player, word, leftDots, self.id === player.id ? player.name : `${self.name} (host)`);
+    if (!result.ok) return emitError(socket, result.message);
+    startIfReady(room);
     broadcast(room);
   });
 
-  socket.on('chooseExpose', ({ index }) => {
+  socket.on('askSymbol', ({ targetId, symbol, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    const asker = resolveActor(room, socket, actorId);
+    const target = getPlayer(room, targetId);
+    const result = askSymbolInternal(room, asker, target, symbol);
+    if (!result.ok) return emitError(socket, result.message);
+    broadcast(room);
+  });
+
+  socket.on('chooseExpose', ({ index, actorId }) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    const self = socketPlayer(room, socket);
     const pending = room.awaitingExpose;
     if (!pending) return emitError(socket, 'There is no exposure choice pending.');
-    const target = room.players.find(p => p.socketId === socket.id);
-    if (!target || pending.playerId !== target.id) return emitError(socket, 'This exposure choice is not yours.');
-
+    const target = getPlayer(room, pending.playerId);
+    if (!canControlPlayer(room, self, target?.id)) return emitError(socket, 'This exposure choice is not yours.');
     const idx = Number.parseInt(index, 10);
-    if (!pending.allowedIndices.includes(idx)) return emitError(socket, 'That slot is not allowed for this exposure.');
-    const mult = pending.type === 'guess' && room.firstGuessAvailable ? room.multiplier : 1;
-    revealSlot(room, target, idx, pending.scoringPlayerId, pending.type === 'guess' ? 'guess' : 'card', mult);
-
-    if (pending.type === 'guess') {
-      room.firstGuessAvailable = false;
-      if (room.status === 'playing') {
-        const asker = getPlayer(room, pending.byPlayerId);
-        addLog(room, `${asker?.name || 'The guesser'} guessed correctly and continues.`);
-      }
-    }
-
-    room.awaitingExpose = null;
-    setTurnTimer(room);
+    const result = chooseExposeInternal(room, target, idx);
+    if (!result.ok) return emitError(socket, result.message);
     broadcast(room);
   });
 
-  socket.on('guessFull', ({ targetId, guess, interruptive }) => {
+  socket.on('manualExpose', ({ targetId, index }) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    const self = socketPlayer(room, socket);
+    const target = getPlayer(room, targetId);
+    if (!target) return emitError(socket, 'Choose a valid target.');
+
+    if (room.awaitingExpose && room.awaitingExpose.playerId === target.id && canControlPlayer(room, self, target.id)) {
+      const idx = Number.parseInt(index, 10);
+      const result = chooseExposeInternal(room, target, idx);
+      if (!result.ok) return emitError(socket, result.message);
+      broadcast(room);
+      return;
+    }
+
+    if (!room.settings.manualReveal) return emitError(socket, 'Click-to-expose mode is turned off.');
+    if (!canControlPlayer(room, self, target.id)) return emitError(socket, 'You can only click-expose your own/local tray.');
+    const active = activePlayer(room);
+    const scorerId = active?.id !== target.id ? active?.id : null;
+    const result = manualExposeInternal(room, target, Number.parseInt(index, 10), scorerId);
+    if (!result.ok) return emitError(socket, result.message);
+    broadcast(room);
+  });
+
+  socket.on('verbalMiss', ({ dotPenalty, actorId }) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    if (room.awaitingExpose) return emitError(socket, 'Resolve the pending exposure first.');
+    const actor = resolveActor(room, socket, actorId);
+    if (!actor || activePlayer(room)?.id !== actor.id) return emitError(socket, 'It is not your turn.');
+    if (dotPenalty) {
+      actor.score -= 50;
+      addLog(room, `${actor.name} had a verbal dot miss and loses 50 points.`);
+    } else {
+      addLog(room, `${actor.name} had a verbal miss.`);
+    }
+    advanceTurnAfterMiss(room);
+    broadcast(room);
+  });
+
+  socket.on('guessFull', ({ targetId, guess, interruptive, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
     if (room.awaitingExpose) return emitError(socket, 'Wait for the pending exposure choice first.');
-
-    const guesser = room.players.find(p => p.socketId === socket.id);
-    const active = activePlayer(room);
+    const guesser = resolveActor(room, socket, actorId);
     const target = getPlayer(room, targetId);
-    if (!guesser || !target || target.id === guesser.id) return emitError(socket, 'Choose a valid opponent.');
-
-    const isInterrupt = !!interruptive;
-    if (!isInterrupt && active.id !== guesser.id) return emitError(socket, 'Full guesses on your turn only, unless using interruptive guess.');
-    if (isInterrupt && hiddenCount(target) < 5) return emitError(socket, 'Interruptive guesses are only allowed when that opponent has 5 or more hidden spaces.');
-
-    const raw = String(guess || '').trim().toUpperCase();
-    if (!raw) return emitError(socket, 'Enter a full word or full tray pattern.');
-    const normalizedFull = raw.replace(/DOT/g, '.').replace(/[^A-Z.]/g, '');
-    const fullPattern = target.slots.map(s => s.ch).join('');
-    const wordOnly = target.word;
-    const correct = normalizedFull === fullPattern || normalizedFull === wordOnly;
-
-    if (correct) {
-      target.slots.forEach(s => { s.revealed = true; });
-      guesser.score += isInterrupt ? 100 : 50;
-      addLog(room, `${guesser.name} correctly guessed ${target.name}'s ${normalizedFull === fullPattern ? 'full tray' : 'word'} and revealed it. +${isInterrupt ? 100 : 50} points.`);
-      checkGameEnd(room);
-      if (!isInterrupt && room.status === 'playing') {
-        addLog(room, `${guesser.name} continues after a correct full guess.`);
-        setTurnTimer(room);
-      }
-    } else {
-      guesser.score -= isInterrupt ? 50 : 100;
-      addLog(room, `${guesser.name} guessed ${target.name}'s word/tray incorrectly. -${isInterrupt ? 50 : 100} points.`);
-      if (!isInterrupt && active.id === guesser.id) advanceTurnAfterMiss(room);
-    }
-
+    const result = guessFullInternal(room, guesser, target, guess, interruptive);
+    if (!result.ok) return emitError(socket, result.message);
     broadcast(room);
   });
 
   socket.on('forceNextTurn', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
-    const self = room.players.find(p => p.socketId === socket.id);
+    const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can force the next turn.');
     room.awaitingExpose = null;
     room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
@@ -708,10 +1129,10 @@ io.on('connection', (socket) => {
   socket.on('restartRoom', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
-    const self = room.players.find(p => p.socketId === socket.id);
+    const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can reset the room.');
     room.status = 'lobby';
-    room.settings = { ...room.settings };
+    room.currentTheme = null;
     room.turnEndsAt = null;
     room.deck = makeDeck();
     room.discard = [];
@@ -722,12 +1143,9 @@ io.on('connection', (socket) => {
     room.additionalTurnOnMiss = false;
     room.awaitingExpose = null;
     room.endedReason = '';
-    for (const p of room.players) {
-      p.score = 0;
-      p.ready = false;
-      p.slots = null;
-      p.word = '';
-    }
+    room.aiSerial++;
+    if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
+    for (const p of room.players) { p.score = 0; p.ready = false; p.slots = null; p.word = ''; p.memory = {}; }
     room.log = ['Room reset.'];
     broadcast(room);
   });
@@ -735,7 +1153,7 @@ io.on('connection', (socket) => {
   socket.on('leaveRoom', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return;
-    const player = room.players.find(p => p.socketId === socket.id);
+    const player = socketPlayer(room, socket);
     if (!player) return;
     removePlayer(room, player.id, 'left');
     addLog(room, `${player.name} left the room.`);
@@ -746,7 +1164,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return;
-    const player = room.players.find(p => p.socketId === socket.id);
+    const player = socketPlayer(room, socket);
     if (player) {
       player.connected = false;
       player.socketId = null;
@@ -759,8 +1177,9 @@ io.on('connection', (socket) => {
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms.entries()) {
-    const anyConnected = room.players.some(p => p.connected);
+    const anyConnected = room.players.some(p => p.connected && p.socketId);
     if (!anyConnected || now - room.createdAt > ROOM_TTL_MS) {
+      if (room.aiTimer) clearTimeout(room.aiTimer);
       rooms.delete(code);
       continue;
     }
@@ -770,15 +1189,11 @@ setInterval(() => {
       if (room.awaitingExpose) {
         addLog(room, `Time ran out while waiting for ${getPlayer(room, room.awaitingExpose.playerId)?.name || 'a player'} to expose a slot.`);
         room.awaitingExpose = null;
-      } else if (player) {
-        addLog(room, `${player.name} ran out of time.`);
-      }
+      } else if (player) addLog(room, `${player.name} ran out of time.`);
       advanceTurnAfterMiss(room);
       broadcast(room);
     }
   }
 }, 1000);
 
-server.listen(PORT, () => {
-  console.log(`Hidden Word Card Game server listening on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Hidden Word Card Game server listening on port ${PORT}`));
