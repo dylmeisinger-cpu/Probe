@@ -77,3 +77,26 @@ This surgical patch keeps the v4.17 behavior and adds:
 - Card symbols remain centered as their own child layer.
 
 No Spotify, Discord, scoring, deck, AI, or gameplay logic was changed.
+
+
+## v4.19 Tray / Deck / Target Stability Patch
+- Secret trays now start at the first 5-point slot instead of being centered.
+- Normal Turn card count increased to make normal turns more common.
+- Stacked board renders opponents above the center deck and the player tray below it.
+- Turn-card mini display waits until the large flip animation finishes.
+- Arrow Left/Up and Arrow Right/Down cycle the guess target during your turn.
+- Additional tray CSS locks 12-slot racks inside their backgrounds and centers letters/dots on both axes.
+
+## v4.20 Real Tray / Deck / Additional Turn Fix
+
+This patch is focused on the exact board bugs reported after v4.18/v4.19:
+
+- Secret trays now always start at slot 1, the first 5-point position. Words are not centered inside the tray anymore.
+- Every tray remains a strict 12-slot by 1-row rack.
+- The rack background width, slot row width, and slot values now use the same CSS variables so cards cannot stick outside the tray background.
+- Letters and dots are centered on both X and Y axes using a full-card child layer.
+- Turn-card mini display no longer reveals the card face before the large flip animation finishes.
+- Arrow Left/Up and Arrow Right/Down cycle the target selector during your turn without opening the dropdown.
+- Normal Turn card count increased to 60.
+- Additional Turn cards now explicitly store their owner and activate after that player misses, keeping that same player active and drawing a new activity card.
+- This patch preserves Discord Activity support and the existing Spotify/music code without changing the Spotify setup.

@@ -318,7 +318,7 @@ function rand(arr) {
 
 function makeDeck() {
   const templates = [
-    { code: 'NORMAL', count: 22, title: 'Normal Turn', text: 'Make a normal letter, dot, or word guess.' },
+    { code: 'NORMAL', count: 60, title: 'Normal Turn', text: 'Make a normal letter, dot, or word guess.' },
     { code: 'ADDITIONAL', count: 5, title: 'Take an Additional Turn', text: 'After your next miss, draw another activity card and keep playing.' },
     { code: 'LEFT_EXPOSE', count: 4, title: 'Opponent on Your Left Exposes a Letter or Dot', text: 'The opponent to your left chooses one hidden space to expose. You score its value.' },
     { code: 'RIGHT_EXPOSE', count: 4, title: 'Opponent on Your Right Exposes a Letter or Dot', text: 'The opponent to your right chooses one hidden space to expose. You score its value.' },
@@ -410,6 +410,7 @@ function newRoom(hostSocketId, hostName, hostToken) {
     multiplier: 1,
     firstGuessAvailable: true,
     additionalTurnOnMiss: false,
+    additionalTurnOwnerId: null,
     awaitingExpose: null,
     log: [`Room ${code} created.`],
     effects: [],
@@ -567,6 +568,7 @@ function startTurn(room, samePlayer = false) {
   room.multiplier = 1;
   room.firstGuessAvailable = true;
   room.additionalTurnOnMiss = false;
+  room.additionalTurnOwnerId = null;
   room.awaitingExpose = null;
 
   const player = activePlayer(room);
@@ -583,7 +585,12 @@ function startTurn(room, samePlayer = false) {
 }
 
 function applyCard(room, player, card) {
-  if (card.code === 'ADDITIONAL') { room.additionalTurnOnMiss = true; return; }
+  if (card.code === 'ADDITIONAL') {
+    room.additionalTurnOnMiss = true;
+    room.additionalTurnOwnerId = player.id;
+    addEffect(room, 'additional-armed', `${player.name} is protected by an additional-turn card until their next miss.`, { actorId: player.id, cardCode: card.code, cardId: card.id });
+    return;
+  }
 
   if (card.code === 'SELF_DOT') {
     const choices = hiddenIndices(player, '.', true);
@@ -701,11 +708,16 @@ function nextConnectedTurnIndex(room, fromIndex) {
 
 function advanceTurnAfterMiss(room) {
   const player = activePlayer(room);
-  if (room.additionalTurnOnMiss) {
-    addLog(room, `${player?.name || 'The player'}'s additional-turn card activates. They draw another card and continue.`);
+  if (room.additionalTurnOnMiss && (!room.additionalTurnOwnerId || room.additionalTurnOwnerId === player?.id)) {
+    room.additionalTurnOnMiss = false;
+    room.additionalTurnOwnerId = null;
+    addLog(room, `${player?.name || 'The player'}'s additional-turn card activates after the miss. They draw another activity card and keep the turn.`);
+    addEffect(room, 'additional-activate', `${player?.name || 'The player'} keeps the turn from an Additional Turn card.`, { actorId: player?.id || null });
     startTurn(room, true);
     return;
   }
+  room.additionalTurnOnMiss = false;
+  room.additionalTurnOwnerId = null;
   room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
   startTurn(room, false);
 }
@@ -745,6 +757,7 @@ function publicState(room, viewerId) {
     multiplier: room.multiplier,
     firstGuessAvailable: room.firstGuessAvailable,
     additionalTurnOnMiss: room.additionalTurnOnMiss,
+    additionalTurnOwnerId: room.additionalTurnOwnerId,
     settings: room.settings,
     themes: THEMES.map(t => ({ id: t.id, name: t.name, emoji: t.emoji, examples: t.examples })),
     currentTheme: publicTheme(room),
@@ -793,11 +806,10 @@ function hasInteriorDot(pattern) {
 }
 
 
-function centerTrayPattern(pattern) {
+function leftAlignTrayPattern(pattern) {
   const clean = String(pattern || '').replace(/[^A-Z.]/g, '').slice(0, TRAY_SIZE);
   if (!clean) return ''.padEnd(TRAY_SIZE, ' ');
-  const left = Math.floor((TRAY_SIZE - clean.length) / 2);
-  return `${' '.repeat(Math.max(0, left))}${clean}`.padEnd(TRAY_SIZE, ' ').slice(0, TRAY_SIZE);
+  return clean.padEnd(TRAY_SIZE, ' ').slice(0, TRAY_SIZE);
 }
 
 function validateTray(trayRaw, leftDotsRaw) {
@@ -828,7 +840,7 @@ function validateTray(trayRaw, leftDotsRaw) {
     return { ok: false, message: 'Dots can only go before or after the word. Do not put dots between letters.' };
   }
 
-  const centeredPattern = centerTrayPattern(pattern);
+  const centeredPattern = leftAlignTrayPattern(pattern);
   const slots = [];
   for (let i = 0; i < TRAY_SIZE; i++) {
     const rawCh = centeredPattern[i] || '';
@@ -1611,6 +1623,7 @@ io.on('connection', (socket) => {
     room.multiplier = 1;
     room.firstGuessAvailable = true;
     room.additionalTurnOnMiss = false;
+    room.additionalTurnOwnerId = null;
     room.awaitingExpose = null;
     room.endedReason = '';
     room.aiSerial++;
