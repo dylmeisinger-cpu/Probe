@@ -916,7 +916,12 @@ function maybeScheduleAi(room) {
   const pendingTarget = room.awaitingExpose ? getPlayer(room, room.awaitingExpose.playerId) : null;
   if (!active?.isCpu && !pendingTarget?.isCpu) return;
   const serial = ++room.aiSerial;
-  const delay = pendingTarget?.isCpu ? 1500 : 2400 + Math.floor(Math.random() * 900);
+  // v4.6: Slow CPU pacing so players can actually watch the card draw,
+  // read the log/effect, then see the AI choose. This is intentionally
+  // much slower than normal UI timing.
+  const delay = pendingTarget?.isCpu
+    ? 4200 + Math.floor(Math.random() * 900)
+    : 6800 + Math.floor(Math.random() * 1700);
   room.aiTimer = setTimeout(() => {
     room.aiTimer = null;
     if (serial !== room.aiSerial) return;
