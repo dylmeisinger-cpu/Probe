@@ -96,3 +96,12 @@ The AI dictionary uses the `word-list` npm dependency at install time. The app a
 - Added visible wrong-guess / miss animations and separate sounds for good, bad, normal, and special events.
 - Slowed card draw animations so action cards feel deliberate instead of instant.
 - Enforced dot placement: dots can only be before or after the word, never between letters.
+
+
+## v4.6 no-horizontal-scroll table patch
+
+- Removed horizontal scrollbars from the board, trays, and main game view.
+- The board now keeps the 12-slot tray visible by moving side panels under the play area before the racks get cramped.
+- Round-table seats are evenly spaced with a center gap instead of being compressed together.
+- Every rack stays 12x1 and scales uniformly, preserving card ratio.
+- AI turns and CPU exposure choices are slowed down again so players can watch what happens.
