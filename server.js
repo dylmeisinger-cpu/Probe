@@ -14,10 +14,54 @@ const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 6;
 const MIN_PLAYERS = 2;
 const TRAY_SIZE = 12;
-const SLOT_VALUES = [5, 5, 5, 5, 10, 10, 10, 10, 15, 15, 15, 15];
+const SLOT_VALUES = [5, 5, 10, 15, 15, 10, 10, 15, 15, 10, 5, 5];
 const ROOM_TTL_MS = 1000 * 60 * 60 * 6;
 const VALID_TIMERS = new Set([0, 30, 45, 60, 90, 120]);
 const CPU_DIFFICULTIES = new Set(['easy', 'medium', 'hard', 'genius']);
+
+
+const DISCORD_SCOPES = ['identify'].join(' ');
+const DISCORD_SDK_CDN = 'https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@2.5.0/+esm';
+const discordActivityRooms = new Map();
+let cachedDiscordSdkBundle = null;
+let cachedDiscordSdkAt = 0;
+
+function discordConfigured() {
+  return Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET);
+}
+
+function cleanDiscordKey(value) {
+  const raw = String(value || '').trim();
+  const clean = raw.replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 140);
+  return clean || '';
+}
+
+async function exchangeDiscordCode(code) {
+  if (!discordConfigured()) throw Object.assign(new Error('Discord Activity is not configured.'), { status: 503 });
+  const body = new URLSearchParams({
+    client_id: process.env.DISCORD_CLIENT_ID,
+    client_secret: process.env.DISCORD_CLIENT_SECRET,
+    grant_type: 'authorization_code',
+    code: String(code || '')
+  });
+  if (process.env.DISCORD_REDIRECT_URI) body.set('redirect_uri', process.env.DISCORD_REDIRECT_URI);
+  const response = await fetch('https://discord.com/api/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const msg = data.error_description || data.error || `Discord token request failed (${response.status})`;
+    throw Object.assign(new Error(msg), { status: response.status });
+  }
+  return data;
+}
+
+function discordAvatarUrl(user) {
+  if (!user || !user.id || !user.avatar) return '';
+  return `/api/discord/avatar/${encodeURIComponent(user.id)}/${encodeURIComponent(user.avatar)}?size=128`;
+}
 
 const SPOTIFY_SCOPES = [
   'streaming',
@@ -58,6 +102,95 @@ async function exchangeSpotifyToken(params, req) {
   }
   return data;
 }
+
+
+app.get('/discord', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/activity', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/api/discord/config', (_req, res) => {
+  res.json({
+    enabled: discordConfigured(),
+    clientId: process.env.DISCORD_CLIENT_ID || '',
+    scopes: DISCORD_SCOPES,
+    sdkProxy: '/discord-sdk/embedded-app-sdk.js',
+    activityPath: '/discord'
+  });
+});
+
+app.use('/discord-sdk', express.static(path.join(__dirname, 'node_modules', '@discord', 'embedded-app-sdk', 'output'), { maxAge: '12h' }));
+
+app.get('/discord-sdk/embedded-app-sdk.js', async (_req, res) => {
+  try {
+    const localSdk = path.join(__dirname, 'node_modules', '@discord', 'embedded-app-sdk', 'output', 'index.mjs');
+    if (fs.existsSync(localSdk)) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=43200');
+      return res.sendFile(localSdk);
+    }
+    const age = Date.now() - cachedDiscordSdkAt;
+    if (!cachedDiscordSdkBundle || age > 1000 * 60 * 60 * 12) {
+      const response = await fetch(DISCORD_SDK_CDN);
+      if (!response.ok) throw new Error(`Could not download Discord SDK (${response.status})`);
+      cachedDiscordSdkBundle = await response.text();
+      cachedDiscordSdkAt = Date.now();
+    }
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=43200');
+    res.send(cachedDiscordSdkBundle);
+  } catch (err) {
+    res.status(502).type('application/javascript').send(`throw new Error(${JSON.stringify(err.message || 'Discord SDK proxy failed')});`);
+  }
+});
+
+app.post('/api/discord/token', async (req, res) => {
+  const code = String(req.body?.code || '');
+  if (!code) return res.status(400).json({ error: 'Missing Discord authorization code.' });
+  try {
+    const token = await exchangeDiscordCode(code);
+    res.json({ access_token: token.access_token, token_type: token.token_type, expires_in: token.expires_in, scope: token.scope });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Discord token exchange failed.' });
+  }
+});
+
+
+app.get('/api/discord/avatar/:userId/:hash', async (req, res) => {
+  const userId = String(req.params.userId || '').replace(/[^0-9]/g, '');
+  const hash = String(req.params.hash || '').replace(/[^a-zA-Z0-9_]/g, '');
+  const size = ['64','128','256'].includes(String(req.query.size || '128')) ? String(req.query.size || '128') : '128';
+  if (!userId || !hash) return res.status(400).send('Bad avatar request.');
+  const ext = hash.startsWith('a_') ? 'gif' : 'png';
+  try {
+    const response = await fetch(`https://cdn.discordapp.com/avatars/${userId}/${hash}.${ext}?size=${size}`);
+    if (!response.ok) return res.status(response.status).send('Avatar not found.');
+    res.setHeader('Content-Type', response.headers.get('content-type') || (ext === 'gif' ? 'image/gif' : 'image/png'));
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.send(buffer);
+  } catch (err) {
+    res.status(502).send('Could not fetch avatar.');
+  }
+});
+
+app.post('/api/discord/me', async (req, res) => {
+  const accessToken = String(req.body?.access_token || '');
+  if (!accessToken) return res.status(400).json({ error: 'Missing Discord access token.' });
+  try {
+    const response = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const user = await response.json().catch(() => ({}));
+    if (!response.ok) return res.status(response.status).json({ error: user.message || 'Could not fetch Discord user.' });
+    res.json({ ...user, avatar_url: discordAvatarUrl(user) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not fetch Discord user.' });
+  }
+});
 
 app.get('/api/spotify/config', (req, res) => {
   res.json({
@@ -289,6 +422,55 @@ function newRoom(hostSocketId, hostName, hostToken) {
   };
   rooms.set(code, room);
   return room;
+}
+
+
+function deleteRoom(roomOrCode) {
+  const room = typeof roomOrCode === 'string' ? rooms.get(roomOrCode) : roomOrCode;
+  if (!room) return;
+  if (room.aiTimer) clearTimeout(room.aiTimer);
+  if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
+  if (room.discordKey) discordActivityRooms.delete(room.discordKey);
+  rooms.delete(room.code);
+}
+
+function joinExistingOrNewDiscordRoom(socket, payload = {}) {
+  if (!discordConfigured()) return { ok: false, message: 'Discord Activity is not configured on the server yet.' };
+  const instanceId = cleanDiscordKey(payload.instanceId);
+  if (!instanceId) return { ok: false, message: 'Discord did not provide an Activity instance ID yet.' };
+  const key = `discord:${instanceId}`;
+  let room = rooms.get(discordActivityRooms.get(key));
+  const token = cleanToken(payload.token || (payload.discordUserId ? `discord_${payload.discordUserId}` : ''));
+  const name = cleanName(payload.name || 'Discord Player');
+  const avatar = String(payload.avatar || '').slice(0, 300);
+
+  if (!room) {
+    room = newRoom(socket.id, name, token);
+    room.discordKey = key;
+    room.discord = {
+      instanceId,
+      guildId: cleanDiscordKey(payload.guildId),
+      channelId: cleanDiscordKey(payload.channelId)
+    };
+    if (avatar) room.players[0].avatar = avatar;
+    room.log.unshift('Discord Activity room linked. Everyone joining this Activity shares this Word Vault room.');
+    discordActivityRooms.set(key, room.code);
+    return { ok: true, room, player: room.players[0], created: true, token };
+  }
+
+  const existing = getPlayerByToken(room, token);
+  if (existing && !existing.isCpu && !existing.isLocal) {
+    attachSocketToPlayer(room, existing, socket, name, avatar);
+    return { ok: true, room, player: existing, created: false, token };
+  }
+
+  if (room.status !== 'lobby') return { ok: false, message: 'This Discord Activity game already started. Wait for the next round or use the web link.' };
+  if (room.players.length >= MAX_PLAYERS) return { ok: false, message: 'That Discord Activity room is full.' };
+  const player = newPlayer(socket.id, name, token, false, { avatar });
+  room.players.push(player);
+  socket.join(room.code);
+  addLog(room, `${player.name} joined from Discord.`);
+  return { ok: true, room, player, created: false, token };
 }
 
 function getRoomOfSocket(socketId) {
@@ -705,10 +887,11 @@ function startIfReady(room) {
   }
 }
 
-function attachSocketToPlayer(room, player, socket, name) {
+function attachSocketToPlayer(room, player, socket, name, avatar) {
   player.socketId = socket.id;
   player.connected = true;
   player.name = cleanName(name || player.name);
+  if (avatar) player.avatar = String(avatar).slice(0, 300);
   if (room.disconnectTimers?.has(player.id)) {
     clearTimeout(room.disconnectTimers.get(player.id));
     room.disconnectTimers.delete(player.id);
@@ -1145,6 +1328,16 @@ function makeLocalToken(room) {
 }
 
 io.on('connection', (socket) => {
+
+  socket.on('joinDiscordActivityRoom', (payload = {}) => {
+    const result = joinExistingOrNewDiscordRoom(socket, payload);
+    if (!result.ok) return emitError(socket, result.message);
+    socket.emit('joined', { code: result.room.code, playerId: result.player.id, token: result.token, discordActivity: true });
+    if (result.created) addLog(result.room, `${result.player.name} started the Discord Activity room.`);
+    else addLog(result.room, `${result.player.name} connected through Discord Activity.`);
+    broadcast(result.room);
+  });
+
   socket.on('createRoom', ({ name, token }) => {
     const safeToken = cleanToken(token);
     const room = newRoom(socket.id, name, safeToken);
@@ -1436,7 +1629,7 @@ io.on('connection', (socket) => {
     removePlayer(room, player.id, 'left');
     socket.leave(room.code);
     addLog(room, `${player.name} left the room.`);
-    if (room.players.length === 0) rooms.delete(room.code);
+    if (room.players.length === 0) deleteRoom(room);
     else broadcast(room);
   });
 
@@ -1479,7 +1672,7 @@ setInterval(() => {
     if (!anyConnected || now - room.createdAt > ROOM_TTL_MS) {
       if (room.aiTimer) clearTimeout(room.aiTimer);
       if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
-      rooms.delete(code);
+      deleteRoom(room);
       continue;
     }
 

@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.2.13",
-  "description": "Word Vault v4.13 music, Spotify Connect, configurable audio volume, ducking, and crossfade patch.",
+  "version": "1.4.16",
+  "description": "Word Vault online multiplayer word deduction game with Discord Activity support.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,6 +11,7 @@
     "node": "20.x"
   },
   "dependencies": {
+    "@discord/embedded-app-sdk": "^2.5.0",
     "express": "^4.18.3",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.3",

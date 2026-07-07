@@ -1,55 +1,52 @@
-# Word Vault v4.13 Music + Spotify Patch
+# Word Vault v4.16 — Discord Activity Patch
 
-This patch is built on top of v4.12. It adds the requested music system without changing the core game rules or board UI.
+This build keeps the v4.15 tray scoring and adds a Discord Activity entry point.
 
-## Added in v4.13
+## Normal web play
 
-- Built-in default jazz playlist using the uploaded MP3 tracks.
-- Music defaults to a low volume.
-- Music volume is configurable from the Visual Theme / Audio dialog.
-- Sound-effect volume is configurable separately.
-- Music automatically ducks/dips while sound effects play.
-- Uploaded music fades between songs instead of hard-cutting.
-- Added a Music on/off control that is separate from SFX on/off.
-- Added Spotify Connect support hooks:
-  - Connect Spotify button.
-  - Spotify OAuth callback endpoints.
-  - Spotify token refresh endpoint.
-  - Playlist loading button.
-  - Spotify Web Playback SDK player support.
-- Spotify controls are optional. If Render is not configured with Spotify credentials, the normal built-in music still works.
+Use the site normally at your Render/custom domain.
 
-## Uploaded music files included
+## Discord Activity play
+
+Use this Activity URL in the Discord Developer Portal:
 
 ```text
-public/assets/music/blue-martini-sky.mp3
-public/assets/music/calm-jazz-4.mp3
-public/assets/music/calm-jazz.mp3
-public/assets/music/wavering-slow-jazz-piano.mp3
-public/assets/music/sunset-chill-jazz.mp3
+https://wordvault.fyi/discord
 ```
 
-## Spotify setup on Render
+Players who launch/join the same Discord Activity instance are automatically placed into the same Word Vault room. The game uses Discord display names and avatars when available.
 
-Create a Spotify Developer app, then add this Redirect URI in Spotify:
+## Required Render environment variables
+
+Set these in Render → Environment:
 
 ```text
-https://wordvault.fyi/auth/spotify/callback
+DISCORD_CLIENT_ID=your_discord_application_client_id
+DISCORD_CLIENT_SECRET=your_discord_application_client_secret
 ```
 
-In Render, add these Environment Variables:
+Optional, only if your Discord app requires it:
 
 ```text
-SPOTIFY_CLIENT_ID=your_spotify_client_id
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-SPOTIFY_REDIRECT_URI=https://wordvault.fyi/auth/spotify/callback
+DISCORD_REDIRECT_URI=https://127.0.0.1
 ```
 
-Then deploy again. Spotify Web Playback generally requires a Spotify Premium account.
+The Activity uses Discord OAuth through the Embedded App SDK. The server exchanges the short-lived authorization code at `/api/discord/token`; the secret never goes into browser code.
 
-## Upload/replace on GitHub
+## Discord Developer Portal checklist
 
-Replace these files/folders:
+1. Create/open your Discord application.
+2. Enable Activity / Embedded App support.
+3. Add a placeholder OAuth redirect URI, commonly `https://127.0.0.1`.
+4. Add Activity URL Mapping:
+   - Prefix: `/`
+   - Target: `wordvault.fyi`
+5. Set the Activity launch URL/path to `/discord`.
+6. Launch it from a Discord voice channel Activity shelf.
+
+## Upload to GitHub
+
+Upload/replace:
 
 ```text
 server.js
@@ -57,26 +54,8 @@ package.json
 README.md
 public/index.html
 public/client.js
+public/discord-activity.js
 public/style.css
-public/assets/music/
 ```
 
-The existing sounds in `public/assets/sounds/` should stay in place.
-
-## Render settings
-
-Keep using:
-
-```text
-Build Command:
-corepack enable && corepack prepare yarn@1.22.22 --activate && yarn install --ignore-engines --production=false --no-progress
-
-Start Command:
-node server.js
-```
-
-Then run:
-
-```text
-Manual Deploy → Clear build cache & deploy
-```
+Do not upload `node_modules/` or `package-lock.json`.
