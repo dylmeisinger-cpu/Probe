@@ -1,6 +1,6 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.34",
+  "version": "1.4.35",
   "description": "Word Vault active turn glow and desktop stability patch.",
   "main": "server.js",
   "scripts": {

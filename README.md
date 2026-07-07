@@ -1,12 +1,13 @@
-# Word Vault 4.34
+# Word Vault 4.35
 
-Tiny active-turn glow and desktop stability patch.
+Share preview thumbnail release.
 
 ## What changed
 
-- The moving edge glow is restricted to the player whose turn it actually is.
-- Asked/pending target trays get the normal static target glow only, not the moving turn glow.
-- Round-table tray transform transitions are locked down so trays do not slide around when side-panel state changes.
-- Scrollbar gutters are reserved so side-panel/page scrollbar changes do not shove the board.
+- Added a 1200×630 social/share preview image using the project owner’s Word Vault logo.
+- Added Open Graph and Twitter/X preview metadata to `public/index.html`.
+- Added server-side metadata injection so Render links use the correct absolute thumbnail URL for link previews.
 
-No desktop orientation, tray sizing, board spacing, fullscreen behavior, mobile layout, scoring, AI logic, music, Discord, Spotify, or card timing changes.
+## Not changed
+
+No gameplay, layout, mobile, fullscreen, tray, scoring, AI, music, Discord, or Spotify behavior was changed.

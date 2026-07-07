@@ -76,6 +76,28 @@ function discordAvatarUrl(user) {
   return `/api/discord/avatar/${encodeURIComponent(user.id)}/${encodeURIComponent(user.avatar)}?size=128`;
 }
 
+function requestOrigin(req) {
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  const host = req.get('host') || 'localhost:3000';
+  return `${proto}://${host}`;
+}
+
+function sendIndexWithShareMeta(req, res) {
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  fs.readFile(indexPath, 'utf8', (err, html) => {
+    if (err) return res.status(500).send('Could not load Word Vault.');
+    const origin = requestOrigin(req);
+    const shareImage = `${origin}/assets/share-card.png?v=435`;
+    const pageUrl = `${origin}${req.path || '/'}`;
+    const withAbsoluteMeta = html
+      .replace(/<meta property="og:url" content="[^"]*"\s*\/>/i, '')
+      .replace('</title>', `</title>\n  <meta property="og:url" content="${pageUrl}" />`)
+      .replace(/content="\/assets\/share-card\.png\?v=435"/g, `content="${shareImage}"`);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(withAbsoluteMeta);
+  });
+}
+
 const SPOTIFY_SCOPES = [
   'streaming',
   'user-read-email',
@@ -117,13 +139,9 @@ async function exchangeSpotifyToken(params, req) {
 }
 
 
-app.get('/discord', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/activity', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('/', sendIndexWithShareMeta);
+app.get('/discord', sendIndexWithShareMeta);
+app.get('/activity', sendIndexWithShareMeta);
 
 app.get('/api/discord/config', (_req, res) => {
   res.json({
