@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: word-vault-probe
+    env: node
+    buildCommand: corepack enable && corepack prepare yarn@1.22.22 --activate && yarn install --ignore-engines --production=false --no-progress
+    startCommand: node server.js
