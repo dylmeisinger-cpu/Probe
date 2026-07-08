@@ -1527,9 +1527,6 @@ html{scrollbar-gutter:stable;}
 /* Word Vault 4.36 endgame overlay + CPU construction only.
    No desktop/mobile board formatting changes. */
 #game{position:relative;}
-.cpuConstructionWrap{position:relative;display:inline-grid;place-items:center;max-width:220px;}
-.cpuUnderConstructionBtn{filter:grayscale(.25) brightness(.72);opacity:.62;cursor:not-allowed;pointer-events:none;}
-.cpuConstructionWrap span{position:absolute;inset:auto 8px;top:50%;transform:translateY(-50%) rotate(-6deg);border:2px solid rgba(255,219,104,.95);border-radius:999px;background:rgba(28,17,9,.92);color:var(--gold2);font-size:.66rem;font-weight:1000;letter-spacing:.09em;padding:4px 7px;box-shadow:0 6px 18px rgba(0,0,0,.42);white-space:nowrap;pointer-events:none;}
 .endResultsOverlay{position:absolute;inset:0;z-index:900;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 42%,rgba(255,215,107,.18),rgba(10,6,3,.72) 52%,rgba(5,3,2,.84));backdrop-filter:blur(3px);overflow:hidden;pointer-events:auto;animation:endOverlayFadeIn .28s ease-out both;}
 .endResultsCard{position:relative;z-index:2;width:min(92vw,620px);max-height:min(86vh,720px);overflow:visible;border:1px solid rgba(255,221,120,.46);border-radius:28px;background:linear-gradient(180deg,rgba(72,43,20,.98),rgba(22,13,7,.98));box-shadow:0 28px 90px rgba(0,0,0,.62),0 0 48px rgba(255,190,76,.18);padding:26px;text-align:center;animation:endCardPop .45s cubic-bezier(.17,.87,.26,1.18) both;}
 .endResultsCard h1{margin:4px 0 8px;font-size:clamp(2.1rem,7vw,4rem);color:var(--gold);text-shadow:0 3px 0 rgba(0,0,0,.28);}
