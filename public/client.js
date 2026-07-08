@@ -449,17 +449,13 @@ function renderLobby() {
           </li>`).join('')}</ul>
 
           ${state.isHost ? `
-            <div class="lobbyToolBox">
-              <div class="cpuConstructionWrap" aria-label="CPU players under construction">
-                <button id="addCpuBtn" class="secondaryGameBtn cpuUnderConstructionBtn" disabled aria-disabled="true">+ Add AI CPU</button>
-                <span>UNDER CONSTRUCTION</span>
-              </div>
-              <div class="localAddRow">
-                <input id="localNameInput" maxlength="24" placeholder="Local seat name" />
-                <button id="addLocalBtn" class="secondaryGameBtn">+ Local Seat</button>
-              </div>
-            </div>` : ''}
-        </div>
+           <div class="lobbyToolBox">
+  <div class="localAddRow">
+    <input id="localNameInput" maxlength="24" placeholder="Local seat name" />
+    <button id="addLocalBtn" class="secondaryGameBtn">+ Local Seat</button>
+  </div>
+</div>` : ''}
+</div>
 
         <div class="woodPanel settingsPanel">
           <h2>Game Settings</h2>
