@@ -334,6 +334,12 @@ function randomCode() {
   return code;
 }
 
+function hashStringToHue(value) {
+  let h = 0;
+  for (const ch of String(value || '')) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
+  return Math.abs(h) % 360;
+}
+
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -405,7 +411,8 @@ function newPlayer(socketId, name, token, isHost = false, flags = {}) {
     word: '',
     lastAction: '',
     memory: {},
-    avatar: flags.avatar || ''
+    avatar: flags.avatar || '',
+    media: { cameraOn: false, micOn: false }
   };
 }
 
@@ -452,7 +459,9 @@ function newRoom(hostSocketId, hostName, hostToken) {
     aiSerial: 0,
     fxSerial: 0,
     effectsQuietUntil: 0,
-    nonNormalStreak: 0
+    nonNormalStreak: 0,
+    startingIntro: false,
+    startIntroTimer: null
   };
   rooms.set(code, room);
   return room;
@@ -463,6 +472,7 @@ function deleteRoom(roomOrCode) {
   const room = typeof roomOrCode === 'string' ? rooms.get(roomOrCode) : roomOrCode;
   if (!room) return;
   if (room.aiTimer) clearTimeout(room.aiTimer);
+  if (room.startIntroTimer) clearTimeout(room.startIntroTimer);
   if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
   if (room.discordKey) discordActivityRooms.delete(room.discordKey);
   rooms.delete(room.code);
@@ -525,6 +535,8 @@ function addLog(room, message) {
 function effectDurationForAiDelay(type, meta = {}) {
   if (meta?.cardCode || /^card/.test(String(type || ''))) return AI_EFFECT_DURATIONS_MS.card;
   if (type === 'cpu-action') return AI_EFFECT_DURATIONS_MS.cpu;
+  if (type === 'word-solved') return 3900;
+  if (type === 'starter-sequence') return 10400;
   if (/correct|miss|bad/i.test(String(type || ''))) return AI_EFFECT_DURATIONS_MS.result;
   return AI_EFFECT_DURATIONS_MS.normal;
 }
@@ -566,6 +578,13 @@ function canTakeTurn(room, player) {
   return isConnectedForTurn(player) && hasValidGuessTarget(room, player);
 }
 function turnEligiblePlayers(room) { return room.players.filter(p => canTakeTurn(room, p)); }
+function gameIntroActive(room) { return !!(room && room.status === 'playing' && room.startingIntro); }
+function gameActionsReady(room) { return !!(room && room.status === 'playing' && !room.startingIntro); }
+function starterSpinPlayers(room) {
+  return room.players
+    .filter(p => p.slots && isConnectedForTurn(p))
+    .map(p => ({ id: p.id, name: p.name, hue: hashStringToHue(p.name + p.id), isLocal: !!p.isLocal, isCpu: !!p.isCpu }));
+}
 
 function findLeftPlayer(room, playerId) {
   const idx = room.players.findIndex(p => p.id === playerId);
@@ -700,6 +719,35 @@ function normalizeSymbol(input) {
 
 function slotValue(index) { return SLOT_VALUES[index] || 0; }
 
+function solvedWordText(player) {
+  return String(player?.word || '').toUpperCase();
+}
+
+function hiddenGuessSlotValue(target, includeDots = false) {
+  if (!target?.slots) return { points: 0, indices: [] };
+  const indices = [];
+  let points = 0;
+  for (let i = 0; i < target.slots.length; i++) {
+    const slot = target.slots[i];
+    if (!slotHasCard(slot) || slot.revealed) continue;
+    if (slot.ch === '.' && !includeDots) continue;
+    indices.push(i);
+    points += slotValue(i);
+  }
+  return { points, indices };
+}
+
+function addWordSolvedEffect(room, target, actorId = null) {
+  const word = solvedWordText(target);
+  if (!word) return;
+  addEffect(room, 'word-solved', `${target.name}'s word was solved: ${word}`, {
+    actorId,
+    targetId: target.id,
+    targetName: target.name,
+    solvedWord: word
+  });
+}
+
 function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1) {
   if (!target?.slots) return { ok: false, points: 0 };
   const slot = target.slots[index];
@@ -727,13 +775,15 @@ function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1
     addLog(room, `${target.name} exposed ${visible} in slot ${index + 1}. No points scored.`);
   }
 
-  if ((reason === 'guess' || reason === 'manual') && allExposed(target) && scoringPlayerId) {
+  const solvedNow = allExposed(target);
+  if ((reason === 'guess' || reason === 'manual') && solvedNow && scoringPlayerId) {
     const scorer = getPlayer(room, scoringPlayerId);
     if (scorer) scorer.score += 50;
     addLog(room, `${scorerName} earned a 50 point bonus for exposing ${target.name}'s final hidden space.`);
   }
 
   addEffect(room, 'correct', `${scorerName || 'A player'} revealed ${target.name}'s ${visible}.`, { targetId: target.id, scorerId: scoringPlayerId, slotIndex: index, symbol: slot.ch, points });
+  if (solvedNow) addWordSolvedEffect(room, target, scoringPlayerId || null);
   checkGameEnd(room);
   return { ok: true, points };
 }
@@ -876,6 +926,7 @@ function publicState(room, viewerId) {
       isLocal: p.isLocal,
       cpuDifficulty: p.cpuDifficulty,
       avatar: p.avatar || '',
+      media: p.media || { cameraOn: false, micOn: false },
       ready: p.ready,
       score: p.score,
       hiddenCount: hiddenCount(p),
@@ -887,6 +938,7 @@ function publicState(room, viewerId) {
     effects: room.effects || [],
     endedReason: room.endedReason,
     endedAt: room.endedAt,
+    startingIntro: !!room.startingIntro,
     endResults: finalResults(room)
   };
 }
@@ -996,12 +1048,26 @@ function startIfReady(room) {
   room.players.filter(p => p.isCpu && !p.ready).forEach(cpu => autoAssignCpuSecret(room, cpu));
   if (room.players.length >= MIN_PLAYERS && room.players.every(p => p.ready && p.slots)) {
     room.status = 'playing';
-    room.turnIndex = room.players.findIndex(p => canTakeTurn(room, p));
-    if (room.turnIndex < 0) room.turnIndex = room.players.findIndex(p => p.connected || p.isCpu || p.isLocal);
-    if (room.turnIndex < 0) room.turnIndex = 0;
-    addLog(room, 'All secret trays are ready. The game begins.');
+    const eligible = turnEligiblePlayers(room);
+    const fallback = room.players.filter(p => p.slots && (p.connected || p.isCpu || p.isLocal));
+    const starterPool = eligible.length ? eligible : fallback;
+    const starter = starterPool[Math.floor(Math.random() * starterPool.length)] || room.players[0];
+    room.turnIndex = Math.max(0, room.players.findIndex(p => p.id === starter.id));
+    room.startingIntro = true;
+    room.turnEndsAt = null;
+    room.currentCard = null;
+    room.awaitingExpose = null;
+    addLog(room, 'All secret trays are ready. Randomizing who starts.');
     if (room.currentTheme) addLog(room, `Round theme: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
-    startTurn(room, false);
+    addEffect(room, 'starter-sequence', `${starter.name} starts!`, { players: starterSpinPlayers(room), starterId: starter.id, starterName: starter.name, spinMs: 5000, beginMs: 2000, resultMs: 2500 });
+    if (room.startIntroTimer) clearTimeout(room.startIntroTimer);
+    room.startIntroTimer = setTimeout(() => {
+      if (!rooms.has(room.code) || room.status !== 'playing' || !room.startingIntro) return;
+      room.startingIntro = false;
+      room.startIntroTimer = null;
+      startTurn(room, false);
+      broadcast(room);
+    }, 10000);
   }
 }
 
@@ -1088,6 +1154,7 @@ function rememberCpuMiss(cpu, targetId, symbol) {
 }
 
 function askSymbolInternal(room, asker, target, symbol) {
+  if (gameIntroActive(room)) return { ok: false, message: 'Wait for the starting randomizer to finish.' };
   if (room.awaitingExpose) return { ok: false, message: 'Wait for the pending exposure choice first.' };
   if (!asker || activePlayer(room)?.id !== asker.id) return { ok: false, message: 'It is not your turn.' };
   if (!target || target.id === asker.id) return { ok: false, message: 'Choose a valid opponent.' };
@@ -1121,6 +1188,7 @@ function askSymbolInternal(room, asker, target, symbol) {
   // This preserves the table-game feel and prevents the app from auto-revealing a player's own tray.
   // CPU targets can still resolve a single match automatically so CPU games do not feel stalled.
   if (matches.length === 1 && target.isCpu) {
+    addEffect(room, 'correct-pending', `${asker.name} guessed correctly. ${target.name} has ${normalized === '.' ? 'a dot' : normalized}.`, { actorId: asker.id, targetId: target.id, symbol: normalized });
     const mult = room.firstGuessAvailable ? room.multiplier : 1;
     revealSlot(room, target, matches[0], asker.id, 'guess', mult);
     room.firstGuessAvailable = false;
@@ -1132,6 +1200,8 @@ function askSymbolInternal(room, asker, target, symbol) {
     }
     return { ok: true };
   }
+
+  addEffect(room, 'correct-pending', `${asker.name} guessed correctly. ${target.name} has ${normalized === '.' ? 'a dot' : normalized}.`, { actorId: asker.id, targetId: target.id, symbol: normalized });
 
   room.awaitingExpose = {
     type: 'guess',
@@ -1435,10 +1505,15 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
   const correct = normalizedFull === fullPattern || normalizedFull === wordOnly;
 
   if (correct) {
+    const baseAward = isInterrupt ? 100 : 50;
+    const hiddenAward = hiddenGuessSlotValue(target, normalizedFull === fullPattern);
+    const totalAward = baseAward + hiddenAward.points;
     target.slots.forEach(s => { s.revealed = true; });
-    guesser.score += isInterrupt ? 100 : 50;
-    addLog(room, `${guesser.name} correctly guessed ${target.name}'s ${normalizedFull === fullPattern ? 'full tray' : 'word'} and revealed it. +${isInterrupt ? 100 : 50} points.`);
-    addEffect(room, 'correct-full', `${guesser.name} solved ${target.name}'s tray. +${isInterrupt ? 100 : 50}`, { actorId: guesser.id, targetId: target.id });
+    guesser.score += totalAward;
+    const hiddenText = hiddenAward.points > 0 ? ` + ${hiddenAward.points} hidden slot points` : '';
+    addLog(room, `${guesser.name} correctly guessed ${target.name}'s ${normalizedFull === fullPattern ? 'full tray' : 'word'} and revealed it. +${totalAward} points (${baseAward} solve bonus${hiddenText}).`);
+    addEffect(room, 'correct-full', `${guesser.name} solved ${target.name}'s tray. +${totalAward}`, { actorId: guesser.id, targetId: target.id, points: totalAward, hiddenPoints: hiddenAward.points, solvedWord: solvedWordText(target) });
+    addWordSolvedEffect(room, target, guesser.id);
     checkGameEnd(room);
     if (!isInterrupt && room.status === 'playing') {
       if (!skipActiveIfNoValidTarget(room)) {
@@ -1650,6 +1725,7 @@ io.on('connection', (socket) => {
   socket.on('askSymbol', ({ targetId, symbol, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
     const asker = resolveActor(room, socket, actorId);
     const target = getPlayer(room, targetId);
     const result = askSymbolInternal(room, asker, target, symbol);
@@ -1660,6 +1736,7 @@ io.on('connection', (socket) => {
   socket.on('chooseExpose', ({ index, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
     const self = socketPlayer(room, socket);
     const pending = room.awaitingExpose;
     if (!pending) return emitError(socket, 'There is no exposure choice pending.');
@@ -1674,6 +1751,7 @@ io.on('connection', (socket) => {
   socket.on('manualExpose', ({ targetId, index }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
     const self = socketPlayer(room, socket);
     const target = getPlayer(room, targetId);
     if (!target) return emitError(socket, 'Choose a valid target.');
@@ -1698,6 +1776,7 @@ io.on('connection', (socket) => {
   socket.on('verbalMiss', ({ dotPenalty, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
     if (room.awaitingExpose) return emitError(socket, 'Resolve the pending exposure first.');
     const actor = resolveActor(room, socket, actorId);
     if (!actor || activePlayer(room)?.id !== actor.id) return emitError(socket, 'It is not your turn.');
@@ -1716,6 +1795,7 @@ io.on('connection', (socket) => {
   socket.on('guessFull', ({ targetId, guess, interruptive, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
     if (room.awaitingExpose) return emitError(socket, 'Wait for the pending exposure choice first.');
     const guesser = resolveActor(room, socket, actorId);
     const target = getPlayer(room, targetId);
@@ -1724,9 +1804,33 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+
+  socket.on('mediaState', ({ cameraOn, micOn } = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return;
+    const self = socketPlayer(room, socket);
+    if (!self || self.isCpu || self.isLocal) return;
+    self.media = { cameraOn: !!cameraOn, micOn: !!micOn };
+    socket.to(room.code).emit('mediaStateUpdated', { playerId: self.id, media: self.media });
+    socket.emit('mediaStateUpdated', { playerId: self.id, media: self.media });
+    broadcast(room);
+  });
+
+  socket.on('mediaSignal', ({ to, type, payload } = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return;
+    const fromPlayer = socketPlayer(room, socket);
+    const toPlayer = getPlayer(room, String(to || ''));
+    if (!fromPlayer || fromPlayer.isCpu || fromPlayer.isLocal) return;
+    if (!toPlayer || toPlayer.isCpu || toPlayer.isLocal || !toPlayer.connected || !toPlayer.socketId) return;
+    if (!['offer','answer','ice'].includes(String(type || ''))) return;
+    io.to(toPlayer.socketId).emit('mediaSignal', { from: fromPlayer.id, type, payload });
+  });
+
   socket.on('forceNextTurn', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
     const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can force the next turn.');
     room.awaitingExpose = null;
@@ -1745,6 +1849,8 @@ io.on('connection', (socket) => {
     room.status = 'lobby';
     room.currentTheme = null;
     room.turnEndsAt = null;
+    room.startingIntro = false;
+    if (room.startIntroTimer) { clearTimeout(room.startIntroTimer); room.startIntroTimer = null; }
     room.deck = makeDeck();
     room.discard = [];
     room.currentCard = null;
@@ -1769,6 +1875,8 @@ io.on('connection', (socket) => {
     if (!room) return;
     const player = socketPlayer(room, socket);
     if (!player) return;
+    if (player.media) player.media = { cameraOn: false, micOn: false };
+    socket.to(room.code).emit('mediaStateUpdated', { playerId: player.id, media: player.media || { cameraOn: false, micOn: false } });
     removePlayer(room, player.id, 'left');
     socket.leave(room.code);
     addLog(room, `${player.name} left the room.`);
@@ -1783,6 +1891,8 @@ io.on('connection', (socket) => {
     if (player) {
       player.connected = false;
       player.socketId = null;
+      player.media = { cameraOn: false, micOn: false };
+      socket.to(room.code).emit('mediaStateUpdated', { playerId: player.id, media: player.media });
       addLog(room, `${player.name} disconnected.`);
       // Invalidate pending bot actions so reconnecting/closing tabs cannot leave
       // an old AI timeout firing against stale turn state.
@@ -1815,6 +1925,7 @@ setInterval(() => {
     const anyConnected = room.players.some(p => p.connected && p.socketId);
     if (!anyConnected || now - room.createdAt > ROOM_TTL_MS) {
       if (room.aiTimer) clearTimeout(room.aiTimer);
+  if (room.startIntroTimer) clearTimeout(room.startIntroTimer);
       if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
       deleteRoom(room);
       continue;

@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.37",
-  "description": "Word Vault lobby CPU controls removed while preserving gameplay formatting.",
+  "version": "1.4.44",
+  "description": "Word Vault start randomizer wheel and clean turn-card overlay focus.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
