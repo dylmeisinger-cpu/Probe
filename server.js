@@ -731,7 +731,7 @@ function dailyPuzzleFor(dateValue) {
     theme: { id: theme.id, name: theme.name, emoji: theme.emoji, examples: theme.examples },
     clue: `${theme.name} word, ${word.length} letters`,
     difficulty,
-    cpuName: difficulty === 'genius' ? 'Daily Genius CPU' : 'Daily Smart CPU',
+    cpuName: 'Wolt',
     word
   };
 }
@@ -869,6 +869,19 @@ function loadEnglishCpuWords() {
 
 const ALL_CPU_WORDS = loadEnglishCpuWords();
 const CPU_NAMES = ['Copper Bot', 'Brass Bot', 'Hazel CPU', 'Ivy CPU', 'Gearmind', 'Oak Bot'];
+const CPU_AVATARS = {
+  'Copper Bot': 'assets/bots/copper.svg',
+  'Brass Bot': 'assets/bots/brass.svg',
+  'Hazel CPU': 'assets/bots/hazel.svg',
+  'Ivy CPU': 'assets/bots/ivy.svg',
+  Gearmind: 'assets/bots/gearmind.svg',
+  'Oak Bot': 'assets/bots/oak.svg',
+  Wolt: 'assets/bots/wolt.svg'
+};
+
+function cpuAvatarForName(name) {
+  return CPU_AVATARS[name] || 'assets/bots/gearmind.svg';
+}
 
 function randomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1193,9 +1206,11 @@ function scheduleRandomFallbackOffer(room) {
 function addCpuPlayer(room, difficulty = 'medium') {
   if (!room) return { ok: false, message: 'Room not found.' };
   if (room.players.length >= MAX_PLAYERS) return { ok: false, message: 'That room is full.' };
-  const cpu = newPlayer(null, nextCpuName(room), makeCpuToken(room), false, {
+  const cpuName = nextCpuName(room);
+  const cpu = newPlayer(null, cpuName, makeCpuToken(room), false, {
     isCpu: true,
-    cpuDifficulty: CPU_DIFFICULTIES.has(difficulty) ? difficulty : room.settings.cpuDifficulty || 'medium'
+    cpuDifficulty: CPU_DIFFICULTIES.has(difficulty) ? difficulty : room.settings.cpuDifficulty || 'medium',
+    avatar: cpuAvatarForName(cpuName)
   });
   room.players.push(cpu);
   room.settings.aiEnabled = true;
@@ -2294,19 +2309,23 @@ io.on('connection', (socket) => {
     broadcast(result.room);
   });
 
-  socket.on('createRoom', ({ name, token }) => {
+  socket.on('createRoom', ({ name, token, avatar } = {}) => {
     const safeToken = cleanToken(token);
     const room = newRoom(socket.id, name, safeToken);
+    const cleanedAvatar = cleanAvatarData(avatar) || String(avatar || '').slice(0, 300);
+    if (cleanedAvatar) room.players[0].avatar = cleanedAvatar;
     socket.join(room.code);
     socket.emit('joined', { code: room.code, playerId: room.players[0].id, token: safeToken });
     broadcast(room);
   });
 
-  socket.on('startDailyPuzzle', ({ name, token, date } = {}) => {
+  socket.on('startDailyPuzzle', ({ name, token, avatar, date } = {}) => {
     if (getRoomOfSocket(socket.id)) return emitError(socket, 'Leave your current room before starting the Daily Puzzle.');
     const safeToken = cleanToken(token);
     const puzzle = dailyPuzzleFor(date);
     const room = newRoom(socket.id, name, safeToken);
+    const cleanedAvatar = cleanAvatarData(avatar) || String(avatar || '').slice(0, 300);
+    if (cleanedAvatar) room.players[0].avatar = cleanedAvatar;
     room.dailyPuzzle = true;
     room.dailyPuzzleKey = puzzle.key;
     room.dailyPuzzleInfo = puzzle;
@@ -2324,8 +2343,9 @@ io.on('connection', (socket) => {
     room.currentTheme = THEME_MAP.get(room.settings.themeId) || null;
     const cpuResult = addCpuPlayer(room, puzzle.difficulty || 'genius');
     if (cpuResult.ok) {
-      cpuResult.cpu.name = puzzle.cpuName || 'Daily Smart CPU';
+      cpuResult.cpu.name = puzzle.cpuName || 'Wolt';
       cpuResult.cpu.cpuDifficulty = puzzle.difficulty || 'genius';
+      cpuResult.cpu.avatar = cpuAvatarForName(cpuResult.cpu.name);
       if (!cpuResult.cpu.ready) autoAssignCpuSecret(room, cpuResult.cpu);
     }
     room.status = 'setup';
@@ -2335,12 +2355,13 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
-  socket.on('findRandomMatch', ({ name, token } = {}) => {
+  socket.on('findRandomMatch', ({ name, token, avatar } = {}) => {
     if (getRoomOfSocket(socket.id)) return emitError(socket, 'Leave your current room before joining Random Online.');
     const safeToken = cleanToken(token);
+    const cleanedAvatar = cleanAvatarData(avatar) || String(avatar || '').slice(0, 300);
     const waiting = randomOnlineWaitingRoom(safeToken);
     if (waiting) {
-      const player = newPlayer(socket.id, name, safeToken, false);
+      const player = newPlayer(socket.id, name, safeToken, false, { avatar: cleanedAvatar });
       waiting.players.push(player);
       socket.join(waiting.code);
       markRandomRoomMatched(waiting);
@@ -2353,6 +2374,7 @@ io.on('connection', (socket) => {
     }
 
     const room = newRoom(socket.id, name, safeToken);
+    if (cleanedAvatar) room.players[0].avatar = cleanedAvatar;
     room.randomOnline = true;
     room.randomQueueOpen = true;
     room.randomWaitingSince = Date.now();
@@ -2365,13 +2387,14 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
-  socket.on('joinRoom', ({ code, name, token }) => {
+  socket.on('joinRoom', ({ code, name, token, avatar } = {}) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) return emitError(socket, 'Room not found. Check the room code.');
     const safeToken = cleanToken(token);
+    const cleanedAvatar = cleanAvatarData(avatar) || String(avatar || '').slice(0, 300);
     const existing = getPlayerByToken(room, safeToken);
     if (existing && !existing.isCpu && !existing.isLocal) {
-      attachSocketToPlayer(room, existing, socket, name);
+      attachSocketToPlayer(room, existing, socket, name, cleanedAvatar);
       addLog(room, `${existing.name} rejoined the room.`);
       socket.emit('joined', { code: room.code, playerId: existing.id, token: safeToken });
       broadcast(room);
@@ -2381,7 +2404,7 @@ io.on('connection', (socket) => {
     if (room.status !== 'lobby') return emitError(socket, 'That game already started.');
     if (room.players.length >= MAX_PLAYERS) return emitError(socket, 'That room is full.');
 
-    const player = newPlayer(socket.id, name, safeToken, false);
+    const player = newPlayer(socket.id, name, safeToken, false, { avatar: cleanedAvatar });
     room.players.push(player);
     socket.join(room.code);
     if (room.randomOnline && room.randomQueueOpen && connectedHumanOnlinePlayers(room).length >= 2) markRandomRoomMatched(room);
@@ -2390,13 +2413,14 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
-  socket.on('reconnectRoom', ({ code, name, token }) => {
+  socket.on('reconnectRoom', ({ code, name, token, avatar } = {}) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) return emitError(socket, 'Could not reconnect: room not found.');
     const safeToken = cleanToken(token);
+    const cleanedAvatar = cleanAvatarData(avatar) || String(avatar || '').slice(0, 300);
     const player = getPlayerByToken(room, safeToken);
     if (!player || player.isCpu || player.isLocal) return emitError(socket, 'Could not reconnect: player not found in that room.');
-    attachSocketToPlayer(room, player, socket, name);
+    attachSocketToPlayer(room, player, socket, name, cleanedAvatar);
     addLog(room, `${player.name} reconnected.`);
     socket.emit('joined', { code: room.code, playerId: player.id, token: safeToken });
     broadcast(room);

@@ -1,6 +1,6 @@
-# Word Vault 4.51
+# Word Vault 4.53
 
-Hosted-account update: Supabase/Resend support for cross-device accounts, sessions, verification email, and daily leaderboard storage.
+Daily spotlight polish, Wolt CPU identity, avatar persistence fixes, starter wheel polish, and hosted-account support.
 
 ## What changed
 
@@ -21,6 +21,14 @@ Hosted-account update: Supabase/Resend support for cross-device accounts, sessio
 - Added `/giveup` as an in-game command to pass the active player's turn.
 - Re-enabled the lobby Experimental CPU button.
 - Added extra CPU timing guards so CPU players do not act during rules, starter intro, queued announcements, or turn-card animations.
+- Expanded the Daily Puzzle homepage panel so it fills the right side with score rules, Wolt, and today's leaderboard.
+- Daily Puzzle CPU is now named Wolt and uses a vault-wheel avatar.
+- Added built-in bot avatar pictures for CPU players.
+- Fixed homepage/game avatar transfer so saved avatars carry into rooms, random online, reconnect, and daily puzzle.
+- Delayed the asked-target glow until the result effect is displaying so it does not spoil the guess.
+- Polished the starter wheel labels, segment ticks, and tick timing.
+- Result celebration music now fades out when leaving results.
+- Fixed wide letters like W by applying the existing tile glyph fit scale.
 
 ## What did not change
 
