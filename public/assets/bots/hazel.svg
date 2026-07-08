@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Hazel CPU">
+  <circle cx="64" cy="64" r="60" fill="#142216"/>
+  <circle cx="64" cy="64" r="54" fill="#31552b" stroke="#e6c878" stroke-width="4"/>
+  <rect x="30" y="34" width="68" height="62" rx="20" fill="#162b1c" stroke="#e6c878" stroke-width="4"/>
+  <path d="M36 45c16-14 40-15 56 0" fill="none" stroke="#9ce884" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="50" cy="63" r="7" fill="#ffe6a4"/>
+  <circle cx="78" cy="63" r="7" fill="#ffe6a4"/>
+  <path d="M50 81c8 5 20 5 28 0" fill="none" stroke="#e6c878" stroke-width="5" stroke-linecap="round"/>
+</svg>

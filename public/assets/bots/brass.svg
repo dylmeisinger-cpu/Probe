@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Brass bot">
+  <circle cx="64" cy="64" r="60" fill="#241407"/>
+  <circle cx="64" cy="64" r="54" fill="#d49a35" stroke="#fff0ad" stroke-width="4"/>
+  <path d="M29 67c0-23 16-39 35-39s35 16 35 39v24H29z" fill="#3a2112" stroke="#fff0ad" stroke-width="4"/>
+  <rect x="42" y="54" width="16" height="13" rx="5" fill="#7cc4ff"/>
+  <rect x="70" y="54" width="16" height="13" rx="5" fill="#7cc4ff"/>
+  <path d="M48 82h32" stroke="#fff0ad" stroke-width="5" stroke-linecap="round"/>
+</svg>
