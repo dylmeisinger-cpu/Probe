@@ -349,7 +349,7 @@ function rand(arr) {
 
 function makeDeck() {
   const templates = [
-    { code: 'NORMAL', count: 60, title: 'Normal Turn', text: 'Make a normal letter, dot, or word guess.' },
+    { code: 'NORMAL', count: 43, title: 'Normal Turn', text: 'Make a normal letter, dot, or word guess.' },
     { code: 'ADDITIONAL', count: 5, title: 'Take an Additional Turn', text: 'After your next miss, draw another activity card and keep playing.' },
     { code: 'LEFT_EXPOSE', count: 4, title: 'Opponent on Your Left Exposes a Letter or Dot', text: 'The opponent to your left chooses one hidden space to expose. You score its value.' },
     { code: 'RIGHT_EXPOSE', count: 4, title: 'Opponent on Your Right Exposes a Letter or Dot', text: 'The opponent to your right chooses one hidden space to expose. You score its value.' },
@@ -446,6 +446,7 @@ function newRoom(hostSocketId, hostName, hostToken) {
     log: [`Room ${code} created.`],
     effects: [],
     endedReason: '',
+    endedAt: null,
     aiTimer: null,
     disconnectTimers: new Map(),
     aiSerial: 0,
@@ -557,6 +558,14 @@ function hiddenCount(player) {
 }
 function allExposed(player) { return player.slots && player.slots.every(s => !slotHasCard(s) || s.revealed); }
 function playablePlayers(room) { return room.players.filter(p => p.slots && !allExposed(p)); }
+function isConnectedForTurn(player) { return !!(player && (player.connected || player.isCpu || player.isLocal)); }
+function hasValidGuessTarget(room, player) {
+  return !!(player && player.slots && room.players.some(p => p.id !== player.id && p.slots && !allExposed(p)));
+}
+function canTakeTurn(room, player) {
+  return isConnectedForTurn(player) && hasValidGuessTarget(room, player);
+}
+function turnEligiblePlayers(room) { return room.players.filter(p => canTakeTurn(room, p)); }
 
 function findLeftPlayer(room, playerId) {
   const idx = room.players.findIndex(p => p.id === playerId);
@@ -616,6 +625,11 @@ function startTurn(room, samePlayer = false) {
   room.additionalTurnOnMiss = false;
   room.additionalTurnOwnerId = null;
   room.awaitingExpose = null;
+
+  if (!ensureTurnEligible(room)) {
+    setTurnTimer(room);
+    return;
+  }
 
   const player = activePlayer(room);
   const card = drawCard(room);
@@ -730,6 +744,7 @@ function checkGameEnd(room) {
   if (!done) return;
   room.status = 'ended';
   room.turnEndsAt = null;
+  room.endedAt = Date.now();
   const sorted = [...room.players].sort((a, b) => b.score - a.score);
   const high = sorted[0]?.score || 0;
   const winners = sorted.filter(p => p.score === high).map(p => p.name);
@@ -740,17 +755,45 @@ function checkGameEnd(room) {
 function nextConnectedTurnIndex(room, fromIndex) {
   if (room.players.length === 0) return 0;
   for (let step = 1; step <= room.players.length; step++) {
-    const idx = (fromIndex + step) % room.players.length;
+    const idx = (fromIndex + step + room.players.length) % room.players.length;
     const p = room.players[idx];
-    if ((p.connected || p.isCpu || p.isLocal) && p.slots && !allExposed(p)) return idx;
+    if (canTakeTurn(room, p)) return idx;
   }
-  for (let step = 1; step <= room.players.length; step++) {
-    const idx = (fromIndex + step) % room.players.length;
-    const p = room.players[idx];
-    if (p.connected || p.isCpu || p.isLocal) return idx;
-  }
-  return (fromIndex + 1) % room.players.length;
+  return -1;
 }
+
+function ensureTurnEligible(room) {
+  if (room.status !== 'playing') return false;
+  const current = activePlayer(room);
+  if (canTakeTurn(room, current)) return true;
+  const nextIdx = nextConnectedTurnIndex(room, Math.max(-1, room.turnIndex - 1));
+  if (nextIdx >= 0) {
+    const skipped = current?.name ? `${current.name} has no valid opponent left to guess.` : 'The current player has no valid opponent left to guess.';
+    addLog(room, skipped);
+    room.turnIndex = nextIdx;
+    return true;
+  }
+  addLog(room, 'No eligible player can take a turn right now. Waiting for the game to finish.');
+  return false;
+}
+
+function skipActiveIfNoValidTarget(room) {
+  if (room.status !== 'playing' || room.awaitingExpose) return false;
+  const current = activePlayer(room);
+  if (canTakeTurn(room, current)) return false;
+  if (current?.name) addLog(room, `${current.name} has no valid opponent left to guess, so their turn is skipped.`);
+  const nextIdx = nextConnectedTurnIndex(room, room.turnIndex);
+  if (nextIdx >= 0) {
+    room.additionalTurnOnMiss = false;
+    room.additionalTurnOwnerId = null;
+    room.turnIndex = nextIdx;
+    startTurn(room, false);
+  } else {
+    setTurnTimer(room);
+  }
+  return true;
+}
+
 
 function advanceTurnAfterMiss(room) {
   const player = activePlayer(room);
@@ -764,7 +807,8 @@ function advanceTurnAfterMiss(room) {
   }
   room.additionalTurnOnMiss = false;
   room.additionalTurnOwnerId = null;
-  room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
+  const nextIdx = nextConnectedTurnIndex(room, room.turnIndex);
+  if (nextIdx >= 0) room.turnIndex = nextIdx;
   startTurn(room, false);
 }
 
@@ -785,6 +829,20 @@ function makePrivateSlots(player) {
 
 function publicTheme(room) {
   return room.currentTheme ? { id: room.currentTheme.id, name: room.currentTheme.name, emoji: room.currentTheme.emoji, examples: room.currentTheme.examples } : null;
+}
+
+function finalResults(room) {
+  if (!room || room.status !== 'ended') return null;
+  const sorted = [...room.players]
+    .map(p => ({ id: p.id, name: p.name, score: p.score || 0, hiddenCount: hiddenCount(p), isCpu: !!p.isCpu, isLocal: !!p.isLocal }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  let lastScore = null;
+  let lastPlace = 0;
+  return sorted.map((p, idx) => {
+    if (lastScore === null || p.score !== lastScore) lastPlace = idx + 1;
+    lastScore = p.score;
+    return { ...p, place: lastPlace };
+  });
 }
 
 function publicState(room, viewerId) {
@@ -827,7 +885,9 @@ function publicState(room, viewerId) {
     })),
     log: room.log,
     effects: room.effects || [],
-    endedReason: room.endedReason
+    endedReason: room.endedReason,
+    endedAt: room.endedAt,
+    endResults: finalResults(room)
   };
 }
 
@@ -936,7 +996,8 @@ function startIfReady(room) {
   room.players.filter(p => p.isCpu && !p.ready).forEach(cpu => autoAssignCpuSecret(room, cpu));
   if (room.players.length >= MIN_PLAYERS && room.players.every(p => p.ready && p.slots)) {
     room.status = 'playing';
-    room.turnIndex = room.players.findIndex(p => p.connected || p.isCpu || p.isLocal);
+    room.turnIndex = room.players.findIndex(p => canTakeTurn(room, p));
+    if (room.turnIndex < 0) room.turnIndex = room.players.findIndex(p => p.connected || p.isCpu || p.isLocal);
     if (room.turnIndex < 0) room.turnIndex = 0;
     addLog(room, 'All secret trays are ready. The game begins.');
     if (room.currentTheme) addLog(room, `Round theme: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
@@ -996,7 +1057,8 @@ function removePlayer(room, playerId, reason = 'removed') {
     if (wasPlaying && room.players.length) {
       if (wasActive) {
         const from = Math.max(-1, idx - 1);
-        room.turnIndex = nextConnectedTurnIndex(room, from);
+        const nextIdx = nextConnectedTurnIndex(room, from);
+        if (nextIdx >= 0) room.turnIndex = nextIdx;
         startTurn(room, false);
       } else {
         setTurnTimer(room);
@@ -1030,6 +1092,7 @@ function askSymbolInternal(room, asker, target, symbol) {
   if (!asker || activePlayer(room)?.id !== asker.id) return { ok: false, message: 'It is not your turn.' };
   if (!target || target.id === asker.id) return { ok: false, message: 'Choose a valid opponent.' };
   if (!target.slots) return { ok: false, message: 'That opponent has no tray.' };
+  if (allExposed(target)) return { ok: false, message: 'That opponent has no hidden spaces left.' };
 
   const normalized = normalizeSymbol(symbol);
   if (!normalized) return { ok: false, message: 'Ask for one letter, or ask for a dot.' };
@@ -1061,8 +1124,12 @@ function askSymbolInternal(room, asker, target, symbol) {
     const mult = room.firstGuessAvailable ? room.multiplier : 1;
     revealSlot(room, target, matches[0], asker.id, 'guess', mult);
     room.firstGuessAvailable = false;
-    if (room.status === 'playing') addLog(room, `${asker.name} guessed correctly and continues.`);
-    setTurnTimer(room);
+    if (room.status === 'playing') {
+      if (!skipActiveIfNoValidTarget(room)) {
+        addLog(room, `${asker.name} guessed correctly and continues.`);
+        setTurnTimer(room);
+      }
+    }
     return { ok: true };
   }
 
@@ -1090,16 +1157,17 @@ function chooseExposeInternal(room, target, idx) {
   const mult = pending.type === 'guess' && room.firstGuessAvailable ? room.multiplier : 1;
   revealSlot(room, target, idx, pending.scoringPlayerId, pending.type === 'guess' ? 'guess' : 'card', mult);
 
+  let continuingAskerName = '';
   if (pending.type === 'guess') {
     room.firstGuessAvailable = false;
-    if (room.status === 'playing') {
-      const asker = getPlayer(room, pending.byPlayerId);
-      addLog(room, `${asker?.name || 'The guesser'} guessed correctly and continues.`);
-    }
+    continuingAskerName = getPlayer(room, pending.byPlayerId)?.name || 'The guesser';
   }
 
   room.awaitingExpose = null;
-  setTurnTimer(room);
+  if (room.status === 'playing' && !skipActiveIfNoValidTarget(room)) {
+    if (continuingAskerName) addLog(room, `${continuingAskerName} guessed correctly and continues.`);
+    setTurnTimer(room);
+  }
   return { ok: true };
 }
 
@@ -1110,7 +1178,7 @@ function manualExposeInternal(room, target, idx, scorerId) {
   if (!slot || !slotHasCard(slot) || slot.revealed) return { ok: false, message: 'Choose a hidden card slot.' };
   const scorer = scorerId && scorerId !== target.id ? scorerId : null;
   revealSlot(room, target, idx, scorer, 'manual', 1);
-  if (room.status === 'playing') setTurnTimer(room);
+  if (room.status === 'playing' && !skipActiveIfNoValidTarget(room)) setTurnTimer(room);
   return { ok: true };
 }
 
@@ -1373,8 +1441,10 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
     addEffect(room, 'correct-full', `${guesser.name} solved ${target.name}'s tray. +${isInterrupt ? 100 : 50}`, { actorId: guesser.id, targetId: target.id });
     checkGameEnd(room);
     if (!isInterrupt && room.status === 'playing') {
-      addLog(room, `${guesser.name} continues after a correct full guess.`);
-      setTurnTimer(room);
+      if (!skipActiveIfNoValidTarget(room)) {
+        addLog(room, `${guesser.name} continues after a correct full guess.`);
+        setTurnTimer(room);
+      }
     }
   } else {
     guesser.score -= isInterrupt ? 50 : 100;
@@ -1503,15 +1573,9 @@ io.on('connection', (socket) => {
     if (!room) return emitError(socket, 'You are not in a room.');
     const self = socketPlayer(room, socket);
     if (room.hostId !== self?.id) return emitError(socket, 'Only the host can add CPU players.');
-    if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'CPU players can only be added before the game starts.');
-    if (room.players.length >= MAX_PLAYERS) return emitError(socket, 'That room is full.');
-    room.settings.aiEnabled = true;
-    const cpu = newPlayer(null, nextCpuName(room), makeCpuToken(room), false, { isCpu: true, cpuDifficulty: room.settings.cpuDifficulty });
-    room.players.push(cpu);
-    addLog(room, `${cpu.name} joined as an AI competitor.`);
-    if (room.status === 'setup') { autoAssignCpuSecret(room, cpu); startIfReady(room); }
-    broadcast(room);
+    return emitError(socket, 'CPU players are under construction right now.');
   });
+
 
   socket.on('addLocalPlayer', ({ name }) => {
     const room = getRoomOfSocket(socket.id);
@@ -1666,7 +1730,8 @@ io.on('connection', (socket) => {
     const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can force the next turn.');
     room.awaitingExpose = null;
-    room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
+    const nextIdx = nextConnectedTurnIndex(room, room.turnIndex);
+    if (nextIdx >= 0) room.turnIndex = nextIdx;
     addLog(room, 'Host forced the next turn.');
     startTurn(room, false);
     broadcast(room);
@@ -1690,6 +1755,7 @@ io.on('connection', (socket) => {
     room.additionalTurnOwnerId = null;
     room.awaitingExpose = null;
     room.endedReason = '';
+    room.endedAt = null;
     room.aiSerial++;
     room.effectsQuietUntil = 0;
     if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
@@ -1730,7 +1796,8 @@ io.on('connection', (socket) => {
           const stillGone = getPlayer(room, player.id);
           if (!stillGone || stillGone.connected || activePlayer(room)?.id !== player.id) return;
           room.awaitingExpose = room.awaitingExpose?.playerId === player.id ? null : room.awaitingExpose;
-          room.turnIndex = nextConnectedTurnIndex(room, room.turnIndex);
+          const nextIdx = nextConnectedTurnIndex(room, room.turnIndex);
+          if (nextIdx >= 0) room.turnIndex = nextIdx;
           addLog(room, `${player.name}'s stale turn was skipped after disconnect.`);
           if (room.players.length) startTurn(room, false);
           broadcast(room);
