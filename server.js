@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -18,6 +19,21 @@ const SLOT_VALUES = [5, 5, 10, 15, 15, 10, 10, 15, 15, 10, 5, 5];
 const ROOM_TTL_MS = 1000 * 60 * 60 * 6;
 const VALID_TIMERS = new Set([0, 30, 45, 60, 90, 120]);
 const CPU_DIFFICULTIES = new Set(['easy', 'medium', 'hard', 'genius']);
+const RANDOM_CPU_FALLBACK_MS = 20000;
+const RANDOM_AWAY_GRACE_MS = 20000;
+const RANDOM_AWAY_PENALTY = 20;
+const DATA_DIR = path.join(__dirname, 'data');
+const ACCOUNT_DB_PATH = path.join(DATA_DIR, 'word-vault-db.json');
+const EMAIL_OUTBOX_PATH = path.join(DATA_DIR, 'email-outbox.jsonl');
+const DAILY_LEADERBOARD_PATH = path.join(DATA_DIR, 'daily-leaderboard.json');
+const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '');
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '');
+const RESEND_FROM_EMAIL = String(process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || '');
+const DAILY_BASE_SCORE = 1200;
+const DAILY_GUESS_PENALTY = 35;
+const DAILY_TIME_PENALTY_PER_10_SEC = 5;
+const DAILY_MIN_SCORE = 50;
 
 // Server-side estimate of the client announcement queue. AI should not choose
 // before the turn-card draw/reveal and other board announcements have cleared.
@@ -31,6 +47,297 @@ const AI_EFFECT_DURATIONS_MS = {
   result: 2580,
   normal: 2180
 };
+
+function ensureDataDir() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function defaultAccountDb() {
+  return { users: {}, sessions: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+}
+
+function loadAccountDb() {
+  ensureDataDir();
+  try {
+    const raw = fs.readFileSync(ACCOUNT_DB_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      ...defaultAccountDb(),
+      ...parsed,
+      users: parsed.users || {},
+      sessions: parsed.sessions || {}
+    };
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn('Could not read account database; starting with an empty database.', err.message);
+    return defaultAccountDb();
+  }
+}
+
+function saveAccountDb(db) {
+  ensureDataDir();
+  db.updatedAt = new Date().toISOString();
+  const tmp = `${ACCOUNT_DB_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
+  fs.renameSync(tmp, ACCOUNT_DB_PATH);
+}
+
+const accountDb = loadAccountDb();
+
+function loadDailyLeaderboardDb() {
+  ensureDataDir();
+  try {
+    const parsed = JSON.parse(fs.readFileSync(DAILY_LEADERBOARD_PATH, 'utf8'));
+    return { days: parsed.days || {} };
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn('Could not read daily leaderboard database; starting empty.', err.message);
+    return { days: {} };
+  }
+}
+
+function saveDailyLeaderboardDb(db) {
+  ensureDataDir();
+  const tmp = `${DAILY_LEADERBOARD_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
+  fs.renameSync(tmp, DAILY_LEADERBOARD_PATH);
+}
+
+const dailyLeaderboardDb = loadDailyLeaderboardDb();
+const dailyLeaderboardCache = dailyLeaderboardDb.days;
+const userCacheByPlayerToken = new Map(Object.values(accountDb.users || {}).filter(u => u.playerToken).map(u => [u.playerToken, u]));
+
+function supabaseConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function resendConfigured() {
+  return Boolean(RESEND_API_KEY && RESEND_FROM_EMAIL);
+}
+
+async function supabaseRequest(table, { method = 'GET', query = {}, body, single = false, maybeSingle = false } = {}) {
+  if (!supabaseConfigured()) throw new Error('Supabase is not configured.');
+  const url = new URL(`/rest/v1/${table}`, SUPABASE_URL);
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+  const response = await fetch(url, {
+    method,
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: method === 'POST' ? 'return=representation' : 'return=representation'
+    },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const msg = data?.message || data?.hint || `Supabase request failed (${response.status})`;
+    throw new Error(msg);
+  }
+  if (single) return Array.isArray(data) ? data[0] : data;
+  if (maybeSingle) return Array.isArray(data) ? (data[0] || null) : data;
+  return data || [];
+}
+
+function userRowToApp(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    passwordHash: row.password_hash,
+    passwordSalt: row.password_salt,
+    verified: !!row.verified,
+    verifyToken: row.verify_token || '',
+    playerToken: row.player_token,
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at || null,
+    verifiedAt: row.verified_at || null
+  };
+}
+
+function userToRow(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    password_hash: user.passwordHash,
+    password_salt: user.passwordSalt,
+    verified: !!user.verified,
+    verify_token: user.verifyToken || null,
+    player_token: user.playerToken,
+    created_at: user.createdAt,
+    last_login_at: user.lastLoginAt || null,
+    verified_at: user.verifiedAt || null
+  };
+}
+
+function cacheUser(user) {
+  if (user?.playerToken) userCacheByPlayerToken.set(user.playerToken, user);
+  return user;
+}
+
+function cleanEmail(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 120);
+}
+
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function makeToken(prefix = '') {
+  return `${prefix}${crypto.randomBytes(24).toString('base64url')}`;
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('base64url')) {
+  const hash = crypto.scryptSync(String(password || ''), salt, 64).toString('base64url');
+  return { salt, hash };
+}
+
+function verifyPassword(password, user) {
+  if (!user?.passwordHash || !user?.passwordSalt) return false;
+  const test = crypto.scryptSync(String(password || ''), user.passwordSalt, 64);
+  const stored = Buffer.from(user.passwordHash, 'base64url');
+  return stored.length === test.length && crypto.timingSafeEqual(stored, test);
+}
+
+function publicAccountUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    verified: !!user.verified,
+    playerToken: user.playerToken,
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt || null
+  };
+}
+
+async function findUserByEmail(email) {
+  if (supabaseConfigured()) {
+    const row = await supabaseRequest('word_vault_users', { query: { email: `eq.${email}`, select: '*', limit: 1 }, maybeSingle: true });
+    return cacheUser(userRowToApp(row));
+  }
+  return Object.values(accountDb.users).find(u => u.email === email);
+}
+
+async function findUserByVerifyToken(token) {
+  if (supabaseConfigured()) {
+    const row = await supabaseRequest('word_vault_users', { query: { verify_token: `eq.${token}`, select: '*', limit: 1 }, maybeSingle: true });
+    return cacheUser(userRowToApp(row));
+  }
+  return Object.values(accountDb.users).find(u => u.verifyToken === token);
+}
+
+async function createUserRecord(user) {
+  if (supabaseConfigured()) {
+    await supabaseRequest('word_vault_users', { method: 'POST', body: userToRow(user), single: true });
+    return cacheUser(user);
+  }
+  accountDb.users[user.id] = user;
+  saveAccountDb(accountDb);
+  return cacheUser(user);
+}
+
+async function updateUserRecord(user) {
+  if (supabaseConfigured()) {
+    await supabaseRequest('word_vault_users', { method: 'PATCH', query: { id: `eq.${user.id}` }, body: userToRow(user) });
+    return cacheUser(user);
+  }
+  accountDb.users[user.id] = user;
+  saveAccountDb(accountDb);
+  return cacheUser(user);
+}
+
+async function createSessionRecord(sessionToken, userId) {
+  const session = { userId, createdAt: new Date().toISOString() };
+  if (supabaseConfigured()) {
+    await supabaseRequest('word_vault_sessions', { method: 'POST', body: { token: sessionToken, user_id: userId, created_at: session.createdAt } });
+    return session;
+  }
+  accountDb.sessions[sessionToken] = session;
+  saveAccountDb(accountDb);
+  return session;
+}
+
+async function sessionUser(sessionToken) {
+  const token = String(sessionToken || '').trim();
+  if (supabaseConfigured()) {
+    const session = await supabaseRequest('word_vault_sessions', { query: { token: `eq.${token}`, select: 'user_id', limit: 1 }, maybeSingle: true });
+    if (!session?.user_id) return null;
+    const userRow = await supabaseRequest('word_vault_users', { query: { id: `eq.${session.user_id}`, select: '*', limit: 1 }, maybeSingle: true });
+    return cacheUser(userRowToApp(userRow));
+  }
+  const session = token ? accountDb.sessions[token] : null;
+  if (!session) return null;
+  const user = accountDb.users[session.userId];
+  return user || null;
+}
+
+async function deleteSessionRecord(sessionToken) {
+  const token = String(sessionToken || '').trim();
+  if (!token) return;
+  if (supabaseConfigured()) {
+    await supabaseRequest('word_vault_sessions', { method: 'DELETE', query: { token: `eq.${token}` } });
+    return;
+  }
+  if (accountDb.sessions[token]) {
+    delete accountDb.sessions[token];
+    saveAccountDb(accountDb);
+  }
+}
+
+function verificationLink(req, token) {
+  const baseUrl = String(process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '') || requestOrigin(req);
+  return `${baseUrl}/api/account/verify?token=${encodeURIComponent(token)}`;
+}
+
+async function queueAccountEmail(kind, user, req) {
+  ensureDataDir();
+  const link = verificationLink(req, user.verifyToken);
+  const item = {
+    kind,
+    to: user.email,
+    name: user.name,
+    subject: 'Verify your Word Vault account',
+    body: `Hi ${user.name}, verify your Word Vault account here: ${link}`,
+    verificationLink: link,
+    createdAt: new Date().toISOString(),
+    sent: false,
+    note: 'Local outbox only. Wire SMTP/provider credentials later for real delivery.'
+  };
+  if (resendConfigured()) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: RESEND_FROM_EMAIL,
+          to: user.email,
+          subject: item.subject,
+          text: item.body,
+          html: `<p>Hi ${escapeHtml(user.name)},</p><p>Verify your Word Vault account here:</p><p><a href="${link}">${link}</a></p>`
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || `Resend email failed (${response.status})`);
+      return { ...item, sent: true, provider: 'resend', providerId: data.id || null, note: 'Sent through Resend.' };
+    } catch (err) {
+      item.note = `Resend failed, queued locally instead: ${err.message}`;
+      console.warn(item.note);
+    }
+  }
+  fs.appendFileSync(EMAIL_OUTBOX_PATH, `${JSON.stringify(item)}\n`);
+  console.log(`[Word Vault email] ${item.subject} -> ${user.email}: ${link}`);
+  return item;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
+}
 
 
 const DISCORD_SCOPES = ['identify'].join(' ');
@@ -284,6 +591,103 @@ app.post('/api/spotify/refresh', async (req, res) => {
   }
 });
 
+app.post('/api/account/register', async (req, res) => {
+  const name = cleanName(req.body?.name || 'Player');
+  const email = cleanEmail(req.body?.email);
+  const password = String(req.body?.password || '');
+  if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Use at least 8 characters for your password.' });
+  try {
+    if (await findUserByEmail(email)) return res.status(409).json({ error: 'An account with that email already exists.' });
+
+    const id = makeToken('user_');
+    const playerToken = makeToken('acct_').slice(0, 80);
+    const verifyToken = makeToken('verify_');
+    const passwordData = hashPassword(password);
+    const user = {
+      id,
+      name,
+      email,
+      passwordHash: passwordData.hash,
+      passwordSalt: passwordData.salt,
+      verified: false,
+      verifyToken,
+      playerToken,
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    };
+    await createUserRecord(user);
+    const sessionToken = makeToken('sess_');
+    await createSessionRecord(sessionToken, id);
+    const emailItem = await queueAccountEmail('verify-account', user, req);
+    res.json({ sessionToken, user: publicAccountUser(user), verificationLink: emailItem.verificationLink, message: emailItem.sent ? 'Account created. Verification email sent.' : 'Account created. Verification email queued locally.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not create account.' });
+  }
+});
+
+app.post('/api/account/login', async (req, res) => {
+  const email = cleanEmail(req.body?.email);
+  const password = String(req.body?.password || '');
+  const user = await findUserByEmail(email).catch(() => null);
+  if (!user || !verifyPassword(password, user)) return res.status(401).json({ error: 'Email or password did not match.' });
+  user.lastLoginAt = new Date().toISOString();
+  const sessionToken = makeToken('sess_');
+  await updateUserRecord(user);
+  await createSessionRecord(sessionToken, user.id);
+  res.json({ sessionToken, user: publicAccountUser(user) });
+});
+
+app.get('/api/account/me', async (req, res) => {
+  const user = await sessionUser(req.get('x-word-vault-session') || req.query.session).catch(() => null);
+  if (!user) return res.status(401).json({ error: 'Not signed in.' });
+  res.json({ user: publicAccountUser(user) });
+});
+
+app.post('/api/account/logout', async (req, res) => {
+  const token = String(req.get('x-word-vault-session') || req.body?.session || '').trim();
+  await deleteSessionRecord(token).catch(() => {});
+  res.json({ ok: true });
+});
+
+app.post('/api/account/resend-verification', async (req, res) => {
+  const user = await sessionUser(req.get('x-word-vault-session') || req.body?.session).catch(() => null);
+  if (!user) return res.status(401).json({ error: 'Sign in first.' });
+  if (user.verified) return res.json({ ok: true, message: 'Account is already verified.' });
+  if (!user.verifyToken) user.verifyToken = makeToken('verify_');
+  try {
+    await updateUserRecord(user);
+    const emailItem = await queueAccountEmail('verify-account', user, req);
+    res.json({ ok: true, verificationLink: emailItem.verificationLink, message: emailItem.sent ? 'Verification email sent.' : 'Verification email queued locally.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not send verification email.' });
+  }
+});
+
+app.get('/api/account/verify', async (req, res) => {
+  const token = String(req.query.token || '').trim();
+  const user = await findUserByVerifyToken(token).catch(() => null);
+  if (!user) return res.status(400).send('Verification link is invalid or expired.');
+  user.verified = true;
+  user.verifyToken = '';
+  user.verifiedAt = new Date().toISOString();
+  await updateUserRecord(user);
+  res.send('<!doctype html><title>Word Vault account verified</title><body style="font-family:system-ui;background:#1d130c;color:#fff6dc;padding:32px"><h1>Word Vault account verified</h1><p>You can close this tab and return to the game.</p></body>');
+});
+
+app.get('/api/daily-puzzle', (req, res) => {
+  res.json(publicDailyPuzzle(dailyPuzzleFor(req.query.date)));
+});
+
+app.get('/api/daily-leaderboard', async (req, res) => {
+  const key = dayKey(req.query.date);
+  try {
+    res.json({ key, entries: await readDailyLeaderboard(key) });
+  } catch (err) {
+    res.json({ key, entries: dailyLeaderboardFor(key), warning: err.message || 'Using cached leaderboard.' });
+  }
+});
+
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -304,6 +708,147 @@ const THEMES = [
 
 const THEME_MAP = new Map(THEMES.map(t => [t.id, t]));
 const GENERAL_CPU_WORDS = ['ABOUT','ABOVE','ABROAD','ABSENT','ACCEPT','ACCESS','ACCIDENT','ACCOUNT','ACID','ACORN','ACRYLIC','ACTION','ACTIVE','ACTOR','ACUTE','ADAPT','ADDED','ADDRESS','ADJUST','ADMIT','ADULT','ADVICE','AFFAIR','AFTER','AGAIN','AGENT','AGREE','AHEAD','ALARM','ALBUM','ALERT','ALIEN','ALIVE','ALLOW','ALMOST','ALONE','ALONG','ALTER','AMBER','ANCHOR','ANCIENT','ANGLE','ANIMAL','ANSWER','ANXIETY','APPLE','APRON','AREA','ARGUE','ARROW','ASHES','ASPECT','ATOM','ATTIC','AUDIO','AUTUMN','AVOID','AWARD','AWARE','AWFUL','BACK','BACON','BADGE','BAGEL','BAKER','BALCONY','BALLOON','BANANA','BANK','BARREL','BASIC','BASKET','BATTERY','BEACH','BEACON','BEAN','BEAUTY','BEFORE','BEGIN','BEHIND','BELIEF','BELL','BELT','BERRY','BETTER','BEYOND','BICYCLE','BIRD','BIRTH','BLANKET','BLAST','BLAZER','BLEND','BLIZZARD','BLOOM','BOARD','BOAT','BODY','BOLT','BONE','BONUS','BOOK','BORDER','BOTTLE','BOTTOM','BRAIN','BRANCH','BRAVE','BREAD','BRIDGE','BRIGHT','BROKEN','BRONZE','BROTHER','BRUSH','BUBBLE','BUCKET','BUDGET','BUILDER','BULLET','BUNDLE','BURGER','BUTTON','CABIN','CABLE','CAMERA','CANDLE','CANDY','CANVAS','CARBON','CARD','CAREFUL','CARPET','CASTLE','CASUAL','CATTLE','CAUSE','CEDAR','CENTER','CEREAL','CHAIN','CHAIR','CHANGE','CHARGE','CHEESE','CHERRY','CHEST','CHICKEN','CHOICE','CHURCH','CIRCLE','CITY','CLINIC','CLOCK','CLOSET','CLOUD','COACH','COAST','COBALT','COFFEE','COLLAR','COMEDY','COMMON','COMPASS','COPPER','CORNER','COTTON','COUNTY','COUPON','COYOTE','CRADLE','CRAFT','CRANE','CRASH','CRAYON','CREAM','CREDIT','CREEK','CRICKET','CRISP','CRYSTAL','CYCLE','DAMAGE','DANGER','DEALER','DECADE','DECENT','DECIDE','DEEPER','DEFEND','DEGREE','DELIGHT','DESERT','DESIGN','DESK','DETAIL','DEVICE','DIAMOND','DINNER','DIRECT','DOCTOR','DOLLAR','DONKEY','DOOR','DOUBLE','DRAGON','DRAWER','DREAM','DRESS','DRIFT','DRIVER','DUST','EAGLE','EARLY','EARTH','ECHO','EDITOR','EFFECT','EFFORT','ELBOW','ELECTRIC','EMBER','ENGINE','ENOUGH','ESCAPE','EVENT','EVERY','EXACT','EXCITE','EXHIBIT','FABRIC','FACTOR','FAMILY','FANCY','FARMER','FATHER','FAUCET','FAVOR','FEATHER','FEATURE','FENCE','FEVER','FIELD','FIGURE','FILTER','FINAL','FINGER','FINISH','FIRE','FISHING','FLAME','FLAVOR','FLEECE','FLIGHT','FLOAT','FLOWER','FOLDER','FOREST','FORK','FORMAT','FOSSIL','FOUNTAIN','FRAME','FREEDOM','FREEZER','FRIEND','FROST','FRUIT','FUTURE','GALAXY','GARAGE','GARDEN','GARLIC','GATHER','GENTLE','GHOST','GIANT','GIFT','GINGER','GLASS','GLOBE','GLORY','GOLDEN','GRAPE','GRAPH','GRASS','GRAVITY','GREEN','GRILL','GROUND','GUITAR','HAMMER','HANDLE','HARBOR','HARVEST','HAZEL','HEALTH','HEART','HEATER','HEIGHT','HELMET','HERO','HIDDEN','HIGHER','HOCKEY','HONEY','HORSE','HOSPITAL','HOTEL','HOUSE','HUNTER','ICEBERG','IDEA','IMAGE','IMPACT','INCOME','INDEX','INSECT','ISLAND','JACKET','JELLY','JEWEL','JOB','JOIN','JUDGE','JUICE','JUNGLE','KAYAK','KETTLE','KEYBOARD','KITCHEN','KNIGHT','LABEL','LADDER','LAGOON','LANTERN','LASER','LAUNCH','LAWYER','LEADER','LEAF','LEGEND','LEMON','LETTER','LIBRARY','LIGHT','LION','LIQUID','LITTLE','LIZARD','LOCKER','LOGIC','LOTION','LUMBER','LUNCH','MACHINE','MAGNET','MARBLE','MARKET','MASTER','MATRIX','MEDAL','MEDICINE','MEMORY','METAL','METHOD','MIDDLE','MINERAL','MIRROR','MOBILE','MODEL','MONKEY','MOON','MORNING','MOTHER','MOTION','MOUNTAIN','MOVIE','MUSEUM','MUSIC','MYSTERY','NATION','NEBULA','NEEDLE','NEON','NERVE','NEST','NEWSPAPER','NICKEL','NIGHT','NOBLE','NOODLE','NORTH','NUMBER','OBJECT','OCEAN','OFFICE','ORANGE','ORBIT','OXYGEN','PAINT','PALACE','PANCAKE','PAPER','PARADE','PARK','PARTNER','PASTA','PATIENT','PEACH','PEANUT','PENCIL','PEOPLE','PEPPER','PETAL','PHANTOM','PHONE','PHOTO','PIANO','PICNIC','PICTURE','PILLOW','PIRATE','PITCH','PIZZA','PLANET','PLASTIC','PLATE','PLAYER','POCKET','POINT','POLAR','POND','PORTAL','POWDER','PRAIRIE','PRESENT','PRINTER','PRISON','PROJECT','PULSE','PUZZLE','QUARTZ','QUEEN','QUICK','QUIET','RABBIT','RADIO','RAINBOW','RANCH','RANDOM','READER','REASON','RECORD','REFLEX','REGION','REMOTE','REPAIR','RESCUE','RESORT','RIBBON','RIVER','ROCKET','ROLLER','ROOF','ROOM','ROUTER','RUBBER','SADDLE','SALAD','SALMON','SANDWICH','SATURN','SAUCE','SCHOOL','SCIENCE','SCREEN','SCRIPT','SEASON','SECRET','SHADOW','SHELTER','SHIELD','SHOE','SIGNAL','SILVER','SINGER','SKETCH','SKIING','SLEEP','SLEEVES','SLIDER','SMOKE','SNACK','SNOW','SOCCER','SODIUM','SOLAR','SPARK','SPIDER','SPIRIT','SPLASH','SPRING','SQUARE','STADIUM','STAPLE','STAR','STATION','STEAM','STEEL','STONE','STORM','STORY','STREET','STRING','STUDENT','SUGAR','SUMMER','SUNSET','SURGERY','SWITCH','TABLE','TABLET','TARGET','TEMPLE','TENNIS','THEORY','THUNDER','TIGER','TIMBER','TOAST','TOKEN','TOMATO','TONGUE','TORCH','TOWER','TRACK','TRAIL','TRAIN','TREASURE','TROPHY','TUNNEL','TURTLE','UMBRELLA','UPDATE','VALLEY','VELVET','VIDEO','VILLAGE','VIOLET','VISION','VOYAGE','WALLET','WALNUT','WATER','WEALTH','WEATHER','WINDOW','WINTER','WIZARD','WOOD','WORKER','WORLD','WRENCH','WRITER','YELLOW','ZEBRA','ZEPHYR','ZODIAC'];
+
+function dayKey(value) {
+  const date = value ? new Date(String(value)) : new Date();
+  const safe = Number.isNaN(date.getTime()) ? new Date() : date;
+  return safe.toISOString().slice(0, 10);
+}
+
+function seededNumber(seed) {
+  return crypto.createHash('sha256').update(String(seed)).digest().readUInt32BE(0);
+}
+
+function dailyPuzzleFor(dateValue) {
+  const key = dayKey(dateValue);
+  const theme = THEMES[seededNumber(`theme:${key}`) % THEMES.length] || THEMES[0];
+  const pool = (theme.words?.length ? theme.words : GENERAL_CPU_WORDS).filter(w => /^[A-Z]{3,12}$/.test(w));
+  const word = pool[seededNumber(`word:${key}:${theme.id}`) % pool.length] || 'PLANET';
+  const difficulty = ['hard', 'genius'][seededNumber(`difficulty:${key}`) % 2];
+  return {
+    key,
+    title: 'Daily Puzzle',
+    theme: { id: theme.id, name: theme.name, emoji: theme.emoji, examples: theme.examples },
+    clue: `${theme.name} word, ${word.length} letters`,
+    difficulty,
+    cpuName: difficulty === 'genius' ? 'Daily Genius CPU' : 'Daily Smart CPU',
+    word
+  };
+}
+
+function publicDailyPuzzle(puzzle) {
+  if (!puzzle) return null;
+  return {
+    key: puzzle.key,
+    title: puzzle.title,
+    theme: puzzle.theme,
+    clue: puzzle.clue,
+    difficulty: puzzle.difficulty,
+    cpuName: puzzle.cpuName,
+    baseScore: DAILY_BASE_SCORE,
+    guessPenalty: DAILY_GUESS_PENALTY,
+    timePenaltyPer10Sec: DAILY_TIME_PENALTY_PER_10_SEC,
+    minScore: DAILY_MIN_SCORE
+  };
+}
+
+function calculateDailyScore(guesses, elapsedMs) {
+  const guessPenalty = Math.max(0, Number(guesses || 0)) * DAILY_GUESS_PENALTY;
+  const timePenalty = Math.floor(Math.max(0, Number(elapsedMs || 0)) / 10000) * DAILY_TIME_PENALTY_PER_10_SEC;
+  return Math.max(DAILY_MIN_SCORE, DAILY_BASE_SCORE - guessPenalty - timePenalty);
+}
+
+function dailyLeaderboardFor(dayKeyValue) {
+  const day = String(dayKeyValue || dayKey());
+  const entries = [...(dailyLeaderboardCache[day] || [])];
+  entries.sort((a, b) => b.score - a.score || a.elapsedMs - b.elapsedMs || a.guesses - b.guesses || String(a.name).localeCompare(String(b.name)));
+  return entries.slice(0, 25).map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
+function dailyEntryRowToApp(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    day: row.day,
+    name: row.name,
+    accountId: row.account_id || null,
+    verified: !!row.verified,
+    score: Number(row.score || 0),
+    elapsedMs: Number(row.elapsed_ms || 0),
+    guesses: Number(row.guesses || 0),
+    completedAt: row.completed_at
+  };
+}
+
+async function readDailyLeaderboard(dayKeyValue) {
+  const day = String(dayKeyValue || dayKey());
+  if (supabaseConfigured()) {
+    const rows = await supabaseRequest('word_vault_daily_leaderboard', {
+      query: {
+        day: `eq.${day}`,
+        select: '*',
+        order: 'score.desc,elapsed_ms.asc,guesses.asc,name.asc',
+        limit: 25
+      }
+    });
+    dailyLeaderboardCache[day] = rows.map(dailyEntryRowToApp).filter(Boolean);
+  }
+  return dailyLeaderboardFor(day);
+}
+
+async function persistDailyLeaderboardEntry(entry) {
+  if (supabaseConfigured()) {
+    await supabaseRequest('word_vault_daily_leaderboard', {
+      method: 'POST',
+      body: {
+        id: entry.id,
+        day: entry.day,
+        name: entry.name,
+        account_id: entry.accountId,
+        verified: !!entry.verified,
+        score: entry.score,
+        elapsed_ms: entry.elapsedMs,
+        guesses: entry.guesses,
+        completed_at: entry.completedAt
+      }
+    });
+    await readDailyLeaderboard(entry.day);
+    return;
+  }
+  dailyLeaderboardDb.days[entry.day] = dailyLeaderboardCache[entry.day];
+  saveDailyLeaderboardDb(dailyLeaderboardDb);
+}
+
+function saveDailyLeaderboardEntry(room) {
+  if (!room?.dailyPuzzle || room.dailyLeaderboardSubmitted) return null;
+  const human = room.players.find(p => !p.isCpu && !p.isLocal);
+  if (!human) return null;
+  const key = room.dailyPuzzleKey || dayKey();
+  const elapsedMs = Math.max(0, (room.dailyFinishedAt || Date.now()) - (room.dailyStartedAt || room.createdAt));
+  const guesses = room.dailyGuessCount || 0;
+  const score = calculateDailyScore(guesses, elapsedMs);
+  const user = userCacheByPlayerToken.get(human.token) || Object.values(accountDb.users).find(u => u.playerToken === human.token);
+  const entry = {
+    id: makeToken('daily_'),
+    day: key,
+    name: cleanName(user?.name || human.name),
+    accountId: user?.id || null,
+    verified: !!user?.verified,
+    score,
+    elapsedMs,
+    guesses,
+    completedAt: new Date().toISOString()
+  };
+  dailyLeaderboardCache[key] = [...(dailyLeaderboardCache[key] || []), entry]
+    .sort((a, b) => b.score - a.score || a.elapsedMs - b.elapsedMs || a.guesses - b.guesses)
+    .slice(0, 100);
+  persistDailyLeaderboardEntry(entry).catch(err => console.warn('Could not persist daily leaderboard entry:', err.message));
+  room.dailyLeaderboardSubmitted = true;
+  room.dailyScore = score;
+  room.dailyElapsedMs = elapsedMs;
+  addLog(room, `Daily Puzzle complete: ${entry.name} scored ${score} in ${Math.round(elapsedMs / 1000)} seconds with ${guesses} guesses.`);
+  return entry;
+}
 function loadEnglishCpuWords() {
   const curated = [...new Set([...THEMES.flatMap(t => t.words), ...GENERAL_CPU_WORDS])].filter(w => /^[A-Z]{1,12}$/.test(w));
   try {
@@ -412,7 +957,8 @@ function newPlayer(socketId, name, token, isHost = false, flags = {}) {
     lastAction: '',
     memory: {},
     avatar: flags.avatar || '',
-    media: { cameraOn: false, micOn: false }
+    media: { cameraOn: false, micOn: false },
+    randomAway: false
   };
 }
 
@@ -461,7 +1007,25 @@ function newRoom(hostSocketId, hostName, hostToken) {
     effectsQuietUntil: 0,
     nonNormalStreak: 0,
     startingIntro: false,
-    startIntroTimer: null
+    rulesIntroPending: false,
+    rulesIntroAcknowledged: false,
+    startIntroTimer: null,
+    randomOnline: false,
+    randomQueueOpen: false,
+    randomWaitingSince: null,
+    randomMatchedAt: null,
+    randomCpuFallbackUsed: false,
+    randomFallbackTimer: null,
+    randomAwayTimers: new Map(),
+    dailyPuzzle: false,
+    dailyPuzzleKey: '',
+    dailyPuzzleInfo: null,
+    dailyStartedAt: null,
+    dailyFinishedAt: null,
+    dailyGuessCount: 0,
+    dailyScore: null,
+    dailyElapsedMs: null,
+    dailyLeaderboardSubmitted: false
   };
   rooms.set(code, room);
   return room;
@@ -473,7 +1037,9 @@ function deleteRoom(roomOrCode) {
   if (!room) return;
   if (room.aiTimer) clearTimeout(room.aiTimer);
   if (room.startIntroTimer) clearTimeout(room.startIntroTimer);
+  if (room.randomFallbackTimer) clearTimeout(room.randomFallbackTimer);
   if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
+  if (room.randomAwayTimers) for (const t of room.randomAwayTimers.values()) clearTimeout(t);
   if (room.discordKey) discordActivityRooms.delete(room.discordKey);
   rooms.delete(room.code);
 }
@@ -526,6 +1092,8 @@ function getPlayer(room, playerId) { return room.players.find(p => p.id === play
 function getPlayerByToken(room, token) { return room.players.find(p => p.token === token); }
 function socketPlayer(room, socket) { return room.players.find(p => p.socketId === socket.id); }
 function activePlayer(room) { return room.players[room.turnIndex]; }
+function humanOnlinePlayers(room) { return (room?.players || []).filter(p => !p.isCpu && !p.isLocal); }
+function connectedHumanOnlinePlayers(room) { return humanOnlinePlayers(room).filter(p => p.connected && p.socketId); }
 
 function addLog(room, message) {
   room.log.unshift(message);
@@ -578,12 +1146,132 @@ function canTakeTurn(room, player) {
   return isConnectedForTurn(player) && hasValidGuessTarget(room, player);
 }
 function turnEligiblePlayers(room) { return room.players.filter(p => canTakeTurn(room, p)); }
-function gameIntroActive(room) { return !!(room && room.status === 'playing' && room.startingIntro); }
-function gameActionsReady(room) { return !!(room && room.status === 'playing' && !room.startingIntro); }
+function gameIntroActive(room) { return !!(room && room.status === 'playing' && (room.startingIntro || room.rulesIntroPending)); }
+function gameActionsReady(room) { return !!(room && room.status === 'playing' && !room.startingIntro && !room.rulesIntroPending); }
 function starterSpinPlayers(room) {
   return room.players
     .filter(p => p.slots && isConnectedForTurn(p))
     .map(p => ({ id: p.id, name: p.name, hue: hashStringToHue(p.name + p.id), isLocal: !!p.isLocal, isCpu: !!p.isCpu }));
+}
+
+function randomOnlineWaitingRoom(excludeToken = '') {
+  for (const room of rooms.values()) {
+    if (!room.randomOnline || !room.randomQueueOpen || room.status !== 'lobby') continue;
+    const humans = connectedHumanOnlinePlayers(room);
+    if (humans.length !== 1 || humans[0].token === excludeToken) continue;
+    if (room.players.length >= MAX_PLAYERS) continue;
+    return room;
+  }
+  return null;
+}
+
+function markRandomRoomMatched(room) {
+  clearRandomFallbackTimer(room);
+  room.randomQueueOpen = false;
+  room.randomWaitingSince = null;
+  room.randomMatchedAt = Date.now();
+}
+
+function clearRandomFallbackTimer(room) {
+  if (!room?.randomFallbackTimer) return;
+  clearTimeout(room.randomFallbackTimer);
+  room.randomFallbackTimer = null;
+}
+
+function scheduleRandomFallbackOffer(room) {
+  clearRandomFallbackTimer(room);
+  if (!room?.randomOnline || !room.randomQueueOpen || room.status !== 'lobby') return;
+  const waitingSince = room.randomWaitingSince || Date.now();
+  const delay = Math.max(0, RANDOM_CPU_FALLBACK_MS - (Date.now() - waitingSince));
+  room.randomFallbackTimer = setTimeout(() => {
+    room.randomFallbackTimer = null;
+    if (!randomCpuFallbackAvailable(room)) return;
+    broadcast(room);
+  }, delay + 50);
+}
+
+function addCpuPlayer(room, difficulty = 'medium') {
+  if (!room) return { ok: false, message: 'Room not found.' };
+  if (room.players.length >= MAX_PLAYERS) return { ok: false, message: 'That room is full.' };
+  const cpu = newPlayer(null, nextCpuName(room), makeCpuToken(room), false, {
+    isCpu: true,
+    cpuDifficulty: CPU_DIFFICULTIES.has(difficulty) ? difficulty : room.settings.cpuDifficulty || 'medium'
+  });
+  room.players.push(cpu);
+  room.settings.aiEnabled = true;
+  addLog(room, `${cpu.name} joined as an Experimental CPU player.`);
+  if (room.status === 'setup' && !cpu.ready) {
+    autoAssignCpuSecret(room, cpu);
+    startIfReady(room);
+  }
+  return { ok: true, cpu };
+}
+
+function randomCpuFallbackAvailable(room) {
+  if (!room?.randomOnline || !room.randomQueueOpen || room.status !== 'lobby') return false;
+  if (connectedHumanOnlinePlayers(room).length !== 1) return false;
+  return Date.now() - (room.randomWaitingSince || room.createdAt) >= RANDOM_CPU_FALLBACK_MS;
+}
+
+function randomOnlinePenaltyActive(room) {
+  return !!(room?.randomOnline && room.status === 'playing' && humanOnlinePlayers(room).length >= 2);
+}
+
+function clearRandomAwayTimer(room, playerId) {
+  const timer = room?.randomAwayTimers?.get(playerId);
+  if (timer) clearTimeout(timer);
+  room?.randomAwayTimers?.delete(playerId);
+}
+
+function startRandomAwayTimer(room, player) {
+  if (!randomOnlinePenaltyActive(room) || !player || player.isCpu || player.isLocal) return;
+  if (room.randomAwayTimers?.has(player.id)) return;
+  player.randomAway = true;
+  const timer = setTimeout(() => {
+    room.randomAwayTimers?.delete(player.id);
+    const current = getPlayer(room, player.id);
+    if (!current || !current.randomAway || !randomOnlinePenaltyActive(room)) return;
+    current.score -= RANDOM_AWAY_PENALTY;
+    current.randomAway = false;
+    addLog(room, `${current.name} was away for 20 seconds in Random Online. -${RANDOM_AWAY_PENALTY} points.`);
+    addEffect(room, 'random-away-penalty', `${current.name} looked away too long. -${RANDOM_AWAY_PENALTY}`, { actorId: current.id, points: -RANDOM_AWAY_PENALTY });
+    broadcast(room);
+  }, RANDOM_AWAY_GRACE_MS);
+  room.randomAwayTimers.set(player.id, timer);
+}
+
+function chooseStarter(room) {
+  const eligible = turnEligiblePlayers(room);
+  const fallback = room.players.filter(p => p.slots && (p.connected || p.isCpu || p.isLocal));
+  const starterPool = eligible.length ? eligible : fallback;
+  const starter = starterPool[Math.floor(Math.random() * starterPool.length)] || room.players[0];
+  room.turnIndex = Math.max(0, room.players.findIndex(p => p.id === starter?.id));
+  return starter;
+}
+
+function beginStarterIntro(room) {
+  if (!room || room.status !== 'playing' || room.startingIntro) return false;
+  let starter = activePlayer(room);
+  if (!starter || !starter.slots || (!starter.connected && !starter.isCpu && !starter.isLocal)) starter = chooseStarter(room);
+  if (!starter) return false;
+  room.rulesIntroPending = false;
+  room.rulesIntroAcknowledged = true;
+  room.startingIntro = true;
+  room.turnEndsAt = null;
+  room.currentCard = null;
+  room.awaitingExpose = null;
+  if (room.dailyPuzzle && !room.dailyStartedAt) room.dailyStartedAt = Date.now();
+  addLog(room, 'Rules confirmed. Randomizing who starts.');
+  addEffect(room, 'starter-sequence', `${starter.name} starts!`, { players: starterSpinPlayers(room), starterId: starter.id, starterName: starter.name, spinMs: 5000, beginMs: 2000, resultMs: 2500 });
+  if (room.startIntroTimer) clearTimeout(room.startIntroTimer);
+  room.startIntroTimer = setTimeout(() => {
+    if (!rooms.has(room.code) || room.status !== 'playing' || !room.startingIntro) return;
+    room.startingIntro = false;
+    room.startIntroTimer = null;
+    startTurn(room, false);
+    broadcast(room);
+  }, 10000);
+  return true;
 }
 
 function findLeftPlayer(room, playerId) {
@@ -790,16 +1478,28 @@ function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1
 
 function checkGameEnd(room) {
   if (room.status !== 'playing') return;
-  const done = room.players.every(p => p.slots && p.slots.every(s => !slotHasCard(s) || s.revealed));
+  const done = room.dailyPuzzle
+    ? room.players.some(p => p.isCpu && p.slots && p.slots.every(s => !slotHasCard(s) || s.revealed))
+    : room.players.every(p => p.slots && p.slots.every(s => !slotHasCard(s) || s.revealed));
   if (!done) return;
   room.status = 'ended';
   room.turnEndsAt = null;
   room.endedAt = Date.now();
+  for (const p of room.players) {
+    p.randomAway = false;
+    clearRandomAwayTimer(room, p.id);
+  }
   const sorted = [...room.players].sort((a, b) => b.score - a.score);
   const high = sorted[0]?.score || 0;
   const winners = sorted.filter(p => p.score === high).map(p => p.name);
-  room.endedReason = `Game over. Winner: ${winners.join(', ')} with ${high} points.`;
+  room.endedReason = room.dailyPuzzle
+    ? 'Daily Puzzle complete. The CPU word was solved.'
+    : `Game over. Winner: ${winners.join(', ')} with ${high} points.`;
   addLog(room, room.endedReason);
+  if (room.dailyPuzzle) {
+    room.dailyFinishedAt = room.endedAt;
+    saveDailyLeaderboardEntry(room);
+  }
 }
 
 function nextConnectedTurnIndex(room, fromIndex) {
@@ -860,6 +1560,21 @@ function advanceTurnAfterMiss(room) {
   const nextIdx = nextConnectedTurnIndex(room, room.turnIndex);
   if (nextIdx >= 0) room.turnIndex = nextIdx;
   startTurn(room, false);
+}
+
+function giveUpTurn(room, player) {
+  if (!room || room.status !== 'playing') return { ok: false, message: 'No active game.' };
+  if (!gameActionsReady(room)) return { ok: false, message: 'Wait for the intro or animation to finish.' };
+  if (room.awaitingExpose) return { ok: false, message: 'Resolve the pending exposure first.' };
+  if (!player || activePlayer(room)?.id !== player.id) return { ok: false, message: 'It is not your turn.' };
+  room.additionalTurnOnMiss = false;
+  room.additionalTurnOwnerId = null;
+  addLog(room, `${player.name} used /giveup and passed the turn.`);
+  addEffect(room, 'give-up', `${player.name} gave up guessing. Turn passes.`, { actorId: player.id });
+  const nextIdx = nextConnectedTurnIndex(room, room.turnIndex);
+  if (nextIdx >= 0) room.turnIndex = nextIdx;
+  startTurn(room, false);
+  return { ok: true };
 }
 
 function makePublicSlots(player) {
@@ -929,6 +1644,7 @@ function publicState(room, viewerId) {
       media: p.media || { cameraOn: false, micOn: false },
       ready: p.ready,
       score: p.score,
+      randomAway: !!p.randomAway,
       hiddenCount: hiddenCount(p),
       allExposed: p.slots ? allExposed(p) : false,
       publicSlots: makePublicSlots(p),
@@ -939,6 +1655,24 @@ function publicState(room, viewerId) {
     endedReason: room.endedReason,
     endedAt: room.endedAt,
     startingIntro: !!room.startingIntro,
+    rulesIntroPending: !!room.rulesIntroPending,
+    rulesIntroAcknowledged: !!room.rulesIntroAcknowledged,
+    randomOnline: !!room.randomOnline,
+    randomQueueOpen: !!room.randomQueueOpen,
+    randomWaitingSince: room.randomWaitingSince || null,
+    randomMatchedAt: room.randomMatchedAt || null,
+    randomCpuFallbackAvailable: room.hostId === viewerId && randomCpuFallbackAvailable(room),
+    randomCpuFallbackSeconds: Math.max(0, Math.ceil((RANDOM_CPU_FALLBACK_MS - (Date.now() - (room.randomWaitingSince || room.createdAt))) / 1000)),
+    randomRealPlayers: humanOnlinePlayers(room).length,
+    dailyPuzzle: !!room.dailyPuzzle,
+    dailyPuzzleKey: room.dailyPuzzleKey || '',
+    dailyPuzzleInfo: publicDailyPuzzle(room.dailyPuzzleInfo),
+    dailyStartedAt: room.dailyStartedAt || null,
+    dailyFinishedAt: room.dailyFinishedAt || null,
+    dailyGuessCount: room.dailyGuessCount || 0,
+    dailyScore: room.dailyScore,
+    dailyElapsedMs: room.dailyElapsedMs,
+    dailyLeaderboard: room.dailyPuzzle ? dailyLeaderboardFor(room.dailyPuzzleKey) : [],
     endResults: finalResults(room)
   };
 }
@@ -1034,7 +1768,8 @@ function pickCpuWord(room) {
 }
 
 function autoAssignCpuSecret(room, cpu) {
-  const word = pickCpuWord(room);
+  const daily = room.dailyPuzzle ? (room.dailyPuzzleInfo || dailyPuzzleFor(room.dailyPuzzleKey)) : null;
+  const word = daily?.word || pickCpuWord(room);
   const maxDots = Math.min(3, TRAY_SIZE - word.length);
   const dotCount = maxDots > 0 ? Math.floor(Math.random() * (maxDots + 1)) : 0;
   const leftDots = dotCount > 0 ? Math.floor(Math.random() * (dotCount + 1)) : 0;
@@ -1048,26 +1783,15 @@ function startIfReady(room) {
   room.players.filter(p => p.isCpu && !p.ready).forEach(cpu => autoAssignCpuSecret(room, cpu));
   if (room.players.length >= MIN_PLAYERS && room.players.every(p => p.ready && p.slots)) {
     room.status = 'playing';
-    const eligible = turnEligiblePlayers(room);
-    const fallback = room.players.filter(p => p.slots && (p.connected || p.isCpu || p.isLocal));
-    const starterPool = eligible.length ? eligible : fallback;
-    const starter = starterPool[Math.floor(Math.random() * starterPool.length)] || room.players[0];
-    room.turnIndex = Math.max(0, room.players.findIndex(p => p.id === starter.id));
-    room.startingIntro = true;
+    chooseStarter(room);
+    room.startingIntro = false;
+    room.rulesIntroPending = true;
+    room.rulesIntroAcknowledged = false;
     room.turnEndsAt = null;
     room.currentCard = null;
     room.awaitingExpose = null;
-    addLog(room, 'All secret trays are ready. Randomizing who starts.');
+    addLog(room, 'All secret trays are ready. Review the rules before the starter randomizer.');
     if (room.currentTheme) addLog(room, `Round theme: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
-    addEffect(room, 'starter-sequence', `${starter.name} starts!`, { players: starterSpinPlayers(room), starterId: starter.id, starterName: starter.name, spinMs: 5000, beginMs: 2000, resultMs: 2500 });
-    if (room.startIntroTimer) clearTimeout(room.startIntroTimer);
-    room.startIntroTimer = setTimeout(() => {
-      if (!rooms.has(room.code) || room.status !== 'playing' || !room.startingIntro) return;
-      room.startingIntro = false;
-      room.startIntroTimer = null;
-      startTurn(room, false);
-      broadcast(room);
-    }, 10000);
   }
 }
 
@@ -1114,6 +1838,7 @@ function removePlayer(room, playerId, reason = 'removed') {
       clearTimeout(room.disconnectTimers.get(removed.id));
       room.disconnectTimers.delete(removed.id);
     }
+    clearRandomAwayTimer(room, removed.id);
 
     // Leaving should not leave stale AI timeouts or ghost turns behind.
     room.aiSerial++;
@@ -1121,7 +1846,9 @@ function removePlayer(room, playerId, reason = 'removed') {
     if (room.disconnectTimers) { for (const t of room.disconnectTimers.values()) clearTimeout(t); room.disconnectTimers.clear(); }
 
     if (wasPlaying && room.players.length) {
-      if (wasActive) {
+      if (room.rulesIntroPending) {
+        // Stay on the room-level rules overlay until the current host continues.
+      } else if (wasActive) {
         const from = Math.max(-1, idx - 1);
         const nextIdx = nextConnectedTurnIndex(room, from);
         if (nextIdx >= 0) room.turnIndex = nextIdx;
@@ -1160,6 +1887,7 @@ function askSymbolInternal(room, asker, target, symbol) {
   if (!target || target.id === asker.id) return { ok: false, message: 'Choose a valid opponent.' };
   if (!target.slots) return { ok: false, message: 'That opponent has no tray.' };
   if (allExposed(target)) return { ok: false, message: 'That opponent has no hidden spaces left.' };
+  if (room.dailyPuzzle && !asker.isCpu && !asker.isLocal) room.dailyGuessCount = (room.dailyGuessCount || 0) + 1;
 
   const normalized = normalizeSymbol(symbol);
   if (!normalized) return { ok: false, message: 'Ask for one letter, or ask for a dot.' };
@@ -1431,6 +2159,7 @@ function cpuMaybeFullGuess(room, cpu, target) {
 }
 function cpuTakeAction(room) {
   if (room.status !== 'playing') return;
+  if (!gameActionsReady(room)) return;
   const cpu = activePlayer(room);
   if (!cpu?.isCpu || room.awaitingExpose) return;
   const target = chooseCpuTarget(room, cpu);
@@ -1455,6 +2184,7 @@ function autoResolveCpuExpose(room) {
 
 function maybeScheduleAi(room) {
   if (room.status !== 'playing') return;
+  if (!gameActionsReady(room)) return;
   if (room.aiTimer) return;
 
   // v4.23: an active CPU may be waiting on a human player to flip the correct card.
@@ -1475,6 +2205,11 @@ function maybeScheduleAi(room) {
     room.aiTimer = null;
     if (serial !== room.aiSerial) return;
     if (room.status !== 'playing') return;
+    if (!gameActionsReady(room)) return;
+    if ((room.effectsQuietUntil || 0) > Date.now()) {
+      maybeScheduleAi(room);
+      return;
+    }
 
     if (room.awaitingExpose) {
       if (getPlayer(room, room.awaitingExpose.playerId)?.isCpu) {
@@ -1499,6 +2234,7 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
   if (isInterrupt && hiddenCount(target) < 5) return { ok: false, message: 'Interruptive guesses are only allowed when that opponent has 5 or more hidden spaces.' };
   const raw = String(guess || '').trim().toUpperCase();
   if (!raw) return { ok: false, message: 'Enter a full word or full tray pattern.' };
+  if (room.dailyPuzzle && !guesser.isCpu && !guesser.isLocal) room.dailyGuessCount = (room.dailyGuessCount || 0) + 1;
   const normalizedFull = raw.replace(/DOT/g, '.').replace(/[^A-Z.]/g, '');
   const fullPattern = target.slots.map(s => slotHasCard(s) ? s.ch : '').join('');
   const wordOnly = target.word;
@@ -1566,6 +2302,69 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('startDailyPuzzle', ({ name, token, date } = {}) => {
+    if (getRoomOfSocket(socket.id)) return emitError(socket, 'Leave your current room before starting the Daily Puzzle.');
+    const safeToken = cleanToken(token);
+    const puzzle = dailyPuzzleFor(date);
+    const room = newRoom(socket.id, name, safeToken);
+    room.dailyPuzzle = true;
+    room.dailyPuzzleKey = puzzle.key;
+    room.dailyPuzzleInfo = puzzle;
+    room.dailyStartedAt = null;
+    room.dailyFinishedAt = null;
+    room.dailyGuessCount = 0;
+    room.dailyScore = null;
+    room.dailyElapsedMs = null;
+    room.dailyLeaderboardSubmitted = false;
+    room.settings.aiEnabled = true;
+    room.settings.cpuDifficulty = puzzle.difficulty || 'genius';
+    room.settings.useThemes = true;
+    room.settings.themeMode = 'host';
+    room.settings.themeId = puzzle.theme?.id || 'random_hard';
+    room.currentTheme = THEME_MAP.get(room.settings.themeId) || null;
+    const cpuResult = addCpuPlayer(room, puzzle.difficulty || 'genius');
+    if (cpuResult.ok) {
+      cpuResult.cpu.name = puzzle.cpuName || 'Daily Smart CPU';
+      cpuResult.cpu.cpuDifficulty = puzzle.difficulty || 'genius';
+      if (!cpuResult.cpu.ready) autoAssignCpuSecret(room, cpuResult.cpu);
+    }
+    room.status = 'setup';
+    addLog(room, `Daily Puzzle ${puzzle.key}: ${puzzle.clue}.`);
+    socket.join(room.code);
+    socket.emit('joined', { code: room.code, playerId: room.players[0].id, token: safeToken, dailyPuzzle: true });
+    broadcast(room);
+  });
+
+  socket.on('findRandomMatch', ({ name, token } = {}) => {
+    if (getRoomOfSocket(socket.id)) return emitError(socket, 'Leave your current room before joining Random Online.');
+    const safeToken = cleanToken(token);
+    const waiting = randomOnlineWaitingRoom(safeToken);
+    if (waiting) {
+      const player = newPlayer(socket.id, name, safeToken, false);
+      waiting.players.push(player);
+      socket.join(waiting.code);
+      markRandomRoomMatched(waiting);
+      addLog(waiting, `${player.name} joined from Random Online.`);
+      socket.emit('joined', { code: waiting.code, playerId: player.id, token: safeToken, randomOnline: true });
+      io.to(waiting.players[0].socketId).emit('randomMatchStatus', 'Matched! A random opponent joined.');
+      socket.emit('randomMatchStatus', 'Matched! You joined a Random Online room.');
+      broadcast(waiting);
+      return;
+    }
+
+    const room = newRoom(socket.id, name, safeToken);
+    room.randomOnline = true;
+    room.randomQueueOpen = true;
+    room.randomWaitingSince = Date.now();
+    room.randomCpuFallbackUsed = false;
+    scheduleRandomFallbackOffer(room);
+    socket.join(room.code);
+    addLog(room, 'Random Online waiting room created. Waiting for another player.');
+    socket.emit('joined', { code: room.code, playerId: room.players[0].id, token: safeToken, randomOnline: true });
+    socket.emit('randomMatchStatus', 'Waiting for a random online player...');
+    broadcast(room);
+  });
+
   socket.on('joinRoom', ({ code, name, token }) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) return emitError(socket, 'Room not found. Check the room code.');
@@ -1585,6 +2384,7 @@ io.on('connection', (socket) => {
     const player = newPlayer(socket.id, name, safeToken, false);
     room.players.push(player);
     socket.join(room.code);
+    if (room.randomOnline && room.randomQueueOpen && connectedHumanOnlinePlayers(room).length >= 2) markRandomRoomMatched(room);
     socket.emit('joined', { code: room.code, playerId: player.id, token: safeToken });
     addLog(room, `${player.name} joined the room.`);
     broadcast(room);
@@ -1648,7 +2448,32 @@ io.on('connection', (socket) => {
     if (!room) return emitError(socket, 'You are not in a room.');
     const self = socketPlayer(room, socket);
     if (room.hostId !== self?.id) return emitError(socket, 'Only the host can add CPU players.');
-    return emitError(socket, 'CPU players are under construction right now.');
+    if (room.status !== 'lobby' && room.status !== 'setup') return emitError(socket, 'CPU players can only be added before the game starts.');
+    const result = addCpuPlayer(room, room.settings.cpuDifficulty || 'medium');
+    if (!result.ok) return emitError(socket, result.message);
+    if (room.randomOnline) {
+      clearRandomFallbackTimer(room);
+      room.randomQueueOpen = false;
+      room.randomWaitingSince = null;
+      room.randomCpuFallbackUsed = true;
+    }
+    broadcast(room);
+  });
+
+  socket.on('randomCpuFallback', () => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    const self = socketPlayer(room, socket);
+    if (room.hostId !== self?.id) return emitError(socket, 'Only the host can choose CPU fallback.');
+    if (!randomCpuFallbackAvailable(room)) return emitError(socket, 'Keep waiting a little longer for a random player.');
+    const result = addCpuPlayer(room, 'medium');
+    if (!result.ok) return emitError(socket, result.message);
+    clearRandomFallbackTimer(room);
+    room.randomQueueOpen = false;
+    room.randomWaitingSince = null;
+    room.randomCpuFallbackUsed = true;
+    addLog(room, 'Random Online fallback selected: playing against an Experimental CPU.');
+    broadcast(room);
   });
 
 
@@ -1688,7 +2513,18 @@ io.on('connection', (socket) => {
     if (room.players.length < MIN_PLAYERS) return emitError(socket, 'You need at least 2 players or one AI/local seat.');
     room.status = 'setup';
     room.currentTheme = selectCurrentTheme(room);
-    room.players.forEach(p => { p.ready = false; p.slots = null; p.word = ''; p.trayPattern = ''; p.score = 0; p.memory = {}; });
+    room.rulesIntroPending = false;
+    room.rulesIntroAcknowledged = false;
+    room.players.forEach(p => {
+      p.ready = false;
+      p.slots = null;
+      p.word = '';
+      p.trayPattern = '';
+      p.score = 0;
+      p.memory = {};
+      p.randomAway = false;
+      clearRandomAwayTimer(room, p.id);
+    });
     room.players.filter(p => p.isCpu).forEach(cpu => autoAssignCpuSecret(room, cpu));
     addLog(room, 'Secret word setup started.');
     if (room.currentTheme) addLog(room, `Round theme selected: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
@@ -1719,6 +2555,15 @@ io.on('connection', (socket) => {
     const result = applySecret(room, player, tray ?? word, leftDots, self.id === player.id ? player.name : `${self.name} (host)`);
     if (!result.ok) return emitError(socket, result.message);
     startIfReady(room);
+    broadcast(room);
+  });
+
+  socket.on('rulesIntroGotIt', () => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room || room.status !== 'playing' || !room.rulesIntroPending) return;
+    const self = socketPlayer(room, socket);
+    if (!self || room.hostId !== self.id) return emitError(socket, 'Waiting for the host to continue.');
+    beginStarterIntro(room);
     broadcast(room);
   });
 
@@ -1792,6 +2637,15 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('giveUpTurn', ({ actorId } = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
+    const actor = resolveActor(room, socket, actorId);
+    const result = giveUpTurn(room, actor);
+    if (!result.ok) return emitError(socket, result.message);
+    broadcast(room);
+  });
+
   socket.on('guessFull', ({ targetId, guess, interruptive, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
@@ -1827,6 +2681,21 @@ io.on('connection', (socket) => {
     io.to(toPlayer.socketId).emit('mediaSignal', { from: fromPlayer.id, type, payload });
   });
 
+  socket.on('randomPresence', ({ away } = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return;
+    const self = socketPlayer(room, socket);
+    if (!self || self.isCpu || self.isLocal || !room.randomOnline) return;
+    if (!randomOnlinePenaltyActive(room)) return;
+    if (away) {
+      startRandomAwayTimer(room, self);
+    } else {
+      self.randomAway = false;
+      clearRandomAwayTimer(room, self.id);
+    }
+    broadcast(room);
+  });
+
   socket.on('forceNextTurn', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
@@ -1850,7 +2719,15 @@ io.on('connection', (socket) => {
     room.currentTheme = null;
     room.turnEndsAt = null;
     room.startingIntro = false;
+    room.rulesIntroPending = false;
+    room.rulesIntroAcknowledged = false;
     if (room.startIntroTimer) { clearTimeout(room.startIntroTimer); room.startIntroTimer = null; }
+    room.dailyStartedAt = null;
+    room.dailyFinishedAt = null;
+    room.dailyGuessCount = 0;
+    room.dailyScore = null;
+    room.dailyElapsedMs = null;
+    room.dailyLeaderboardSubmitted = false;
     room.deck = makeDeck();
     room.discard = [];
     room.currentCard = null;
@@ -1865,8 +2742,24 @@ io.on('connection', (socket) => {
     room.aiSerial++;
     room.effectsQuietUntil = 0;
     if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
-    for (const p of room.players) { p.score = 0; p.ready = false; p.slots = null; p.word = ''; p.trayPattern = ''; p.memory = {}; }
-    room.log = ['Room reset.'];
+    for (const p of room.players) {
+      p.score = 0;
+      p.ready = false;
+      p.slots = null;
+      p.word = '';
+      p.trayPattern = '';
+      p.memory = {};
+      p.randomAway = false;
+      clearRandomAwayTimer(room, p.id);
+    }
+    if (room.dailyPuzzle) {
+      room.status = 'setup';
+      room.currentTheme = room.dailyPuzzleInfo?.theme?.id ? THEME_MAP.get(room.dailyPuzzleInfo.theme.id) : room.currentTheme;
+      room.players.filter(p => p.isCpu).forEach(cpu => autoAssignCpuSecret(room, cpu));
+      room.log = [`Daily Puzzle ${room.dailyPuzzleKey} restarted.`];
+    } else {
+      room.log = ['Room reset.'];
+    }
     broadcast(room);
   });
 

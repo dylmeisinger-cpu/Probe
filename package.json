@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.44",
-  "description": "Word Vault start randomizer wheel and clean turn-card overlay focus.",
+  "version": "1.4.51",
+  "description": "Word Vault hosted account support with Supabase, Resend, and persistent daily leaderboards.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
