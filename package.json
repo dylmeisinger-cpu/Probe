@@ -1,6 +1,6 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.56",
+  "version": "1.4.57",
   "description": "Word Vault daily spotlight, Wolt CPU avatar, persistent player avatars, and starter wheel polish.",
   "main": "server.js",
   "scripts": {
