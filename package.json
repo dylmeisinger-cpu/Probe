@@ -1,0 +1,21 @@
+{
+  "name": "multiplayer-hidden-word-card-game",
+  "version": "1.4.61",
+  "description": "Word Vault random competitive 40-second turns, away forfeits, and strict daily/random dictionary validation.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "@discord/embedded-app-sdk": "^2.5.0",
+    "express": "^4.18.3",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.3",
+    "word-list": "^4.1.0"
+  },
+  "packageManager": "yarn@1.22.22"
+}

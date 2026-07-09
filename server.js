@@ -17,7 +17,8 @@ const MIN_PLAYERS = 2;
 const TRAY_SIZE = 12;
 const SLOT_VALUES = [5, 5, 10, 15, 15, 10, 10, 15, 15, 10, 5, 5];
 const ROOM_TTL_MS = 1000 * 60 * 60 * 6;
-const VALID_TIMERS = new Set([0, 30, 45, 60, 90, 120]);
+const RANDOM_COMPETITIVE_TURN_TIMER_SEC = 40;
+const VALID_TIMERS = new Set([0, 30, 40, 45, 60, 90, 120]);
 const CPU_DIFFICULTIES = new Set(['easy', 'medium', 'hard', 'genius']);
 const RANDOM_CPU_FALLBACK_MS = 20000;
 const RANDOM_AWAY_GRACE_MS = 20000;
@@ -938,6 +939,23 @@ function loadEnglishCpuWords() {
 }
 
 const ALL_CPU_WORDS = loadEnglishCpuWords();
+function loadCompetitiveDictionary() {
+  const curated = [...new Set([...THEMES.flatMap(t => t.words), ...GENERAL_CPU_WORDS])]
+    .filter(w => /^[A-Z]{1,12}$/.test(w));
+  try {
+    const text = fs.readFileSync(path.join(__dirname, 'dictionary.txt'), 'utf8');
+    const words = text
+      .split(/\r?\n/)
+      .map(w => w.trim().toUpperCase())
+      .filter(w => /^[A-Z]{1,12}$/.test(w));
+    return new Set([...curated, ...words]);
+  } catch (err) {
+    console.warn('Competitive dictionary was not available; using the built-in curated word list.');
+    return new Set(curated);
+  }
+}
+
+const COMPETITIVE_DICTIONARY = loadCompetitiveDictionary();
 const CPU_NAMES = ['Copper Bot', 'Brass Bot', 'Hazel CPU', 'Ivy CPU', 'Gearmind', 'Oak Bot'];
 const CPU_AVATARS = {
   'Copper Bot': 'assets/bots/copper.svg',
@@ -951,6 +969,10 @@ const CPU_AVATARS = {
 
 function cpuAvatarForName(name) {
   return CPU_AVATARS[name] || 'assets/bots/gearmind.svg';
+}
+
+function competitiveDictionaryRequired(room) {
+  return !!(room?.dailyPuzzle || room?.randomOnline || room?.competitive || room?.ranked || room?.publicMatchmaking);
 }
 
 function randomCode() {
@@ -1041,7 +1063,8 @@ function newPlayer(socketId, name, token, isHost = false, flags = {}) {
     memory: {},
     avatar: flags.avatar || '',
     media: { cameraOn: false, micOn: false },
-    randomAway: false
+    randomAway: false,
+    randomTurnForfeit: false
   };
 }
 
@@ -1101,6 +1124,7 @@ function newRoom(hostSocketId, hostName, hostToken) {
     randomCpuFallbackUsed: false,
     randomFallbackTimer: null,
     randomAwayTimers: new Map(),
+    randomForfeitTimers: new Map(),
     dailyPuzzle: false,
     dailyPuzzleKey: '',
     dailyPuzzleInfo: null,
@@ -1124,6 +1148,7 @@ function deleteRoom(roomOrCode) {
   if (room.randomFallbackTimer) clearTimeout(room.randomFallbackTimer);
   if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
   if (room.randomAwayTimers) for (const t of room.randomAwayTimers.values()) clearTimeout(t);
+  if (room.randomForfeitTimers) for (const t of room.randomForfeitTimers.values()) clearTimeout(t);
   if (room.discordKey) discordActivityRooms.delete(room.discordKey);
   rooms.delete(room.code);
 }
@@ -1259,6 +1284,12 @@ function markRandomRoomMatched(room) {
   room.randomQueueOpen = false;
   room.randomWaitingSince = null;
   room.randomMatchedAt = Date.now();
+  enforceRandomCompetitiveSettings(room);
+}
+
+function enforceRandomCompetitiveSettings(room) {
+  if (!room?.randomOnline) return;
+  room.settings.turnTimerSec = RANDOM_COMPETITIVE_TURN_TIMER_SEC;
 }
 
 function clearRandomFallbackTimer(room) {
@@ -1314,6 +1345,70 @@ function clearRandomAwayTimer(room, playerId) {
   room?.randomAwayTimers?.delete(playerId);
 }
 
+function clearRandomForfeitTimer(room, playerId) {
+  const timer = room?.randomForfeitTimers?.get(playerId);
+  if (timer) clearTimeout(timer);
+  room?.randomForfeitTimers?.delete(playerId);
+}
+
+function scheduleRandomForfeitWhenReady(room, playerId) {
+  if (!room?.randomOnline || !playerId) return;
+  if (room.randomForfeitTimers?.has(playerId)) return;
+  const delay = Math.max(50, (room.effectsQuietUntil || 0) - Date.now() + 75);
+  const timer = setTimeout(() => {
+    room.randomForfeitTimers?.delete(playerId);
+    const player = getPlayer(room, playerId);
+    if (!player || room.status !== 'playing') return;
+    applyRandomAwayTurnForfeit(room, player);
+    broadcast(room);
+  }, delay);
+  room.randomForfeitTimers?.set(playerId, timer);
+}
+
+function consumeRandomTurnForfeit(room, player) {
+  if (!room?.randomOnline || !player?.randomTurnForfeit) return false;
+  player.randomTurnForfeit = false;
+  addLog(room, `${player.name} forfeits this turn for being away in Random Online.`);
+  addEffect(room, 'turn-forfeit', `${player.name} loses this turn for being away.`, { actorId: player.id });
+  return true;
+}
+
+function advanceTurnWithoutAdditional(room) {
+  room.additionalTurnOnMiss = false;
+  room.additionalTurnOwnerId = null;
+  const nextIdx = nextConnectedTurnIndex(room, room.turnIndex);
+  if (nextIdx >= 0) room.turnIndex = nextIdx;
+  startTurn(room, false);
+}
+
+function applyRandomAwayTurnForfeit(room, player) {
+  if (!randomOnlinePenaltyActive(room) || !player || player.isCpu || player.isLocal) return false;
+  if (gameIntroActive(room)) {
+    player.randomTurnForfeit = true;
+    return true;
+  }
+  if (!roomAnnouncementsReady(room)) {
+    scheduleRandomForfeitWhenReady(room, player.id);
+    return true;
+  }
+  if (room.awaitingExpose?.playerId === player.id) {
+    addLog(room, `${player.name} was away during an exposure choice, so the pending choice is cancelled and the turn is forfeited.`);
+    room.awaitingExpose = null;
+    addEffect(room, 'turn-forfeit', `${player.name} loses this turn for being away.`, { actorId: player.id });
+    advanceTurnWithoutAdditional(room);
+    return true;
+  }
+  if (activePlayer(room)?.id === player.id) {
+    addLog(room, `${player.name} forfeits the turn for being away in Random Online.`);
+    addEffect(room, 'turn-forfeit', `${player.name} loses this turn for being away.`, { actorId: player.id });
+    advanceTurnWithoutAdditional(room);
+    return true;
+  }
+  player.randomTurnForfeit = true;
+  addLog(room, `${player.name} will forfeit their next turn for being away in Random Online.`);
+  return true;
+}
+
 function startRandomAwayTimer(room, player) {
   if (!randomOnlinePenaltyActive(room) || !player || player.isCpu || player.isLocal) return;
   if (room.randomAwayTimers?.has(player.id)) return;
@@ -1324,8 +1419,9 @@ function startRandomAwayTimer(room, player) {
     if (!current || !current.randomAway || !randomOnlinePenaltyActive(room)) return;
     current.score -= RANDOM_AWAY_PENALTY;
     current.randomAway = false;
-    addLog(room, `${current.name} was away for 20 seconds in Random Online. -${RANDOM_AWAY_PENALTY} points.`);
-    addEffect(room, 'random-away-penalty', `${current.name} looked away too long. -${RANDOM_AWAY_PENALTY}`, { actorId: current.id, points: -RANDOM_AWAY_PENALTY });
+    addLog(room, `${current.name} was away for 20 seconds in Random Online. -${RANDOM_AWAY_PENALTY} points and turn forfeited.`);
+    addEffect(room, 'random-away-penalty', `${current.name} looked away too long. -${RANDOM_AWAY_PENALTY} and turn forfeited.`, { actorId: current.id, points: -RANDOM_AWAY_PENALTY });
+    applyRandomAwayTurnForfeit(room, current);
     broadcast(room);
   }, RANDOM_AWAY_GRACE_MS);
   room.randomAwayTimers.set(player.id, timer);
@@ -1412,6 +1508,7 @@ function drawCard(room) {
 }
 
 function setTurnTimer(room) {
+  enforceRandomCompetitiveSettings(room);
   const seconds = room.settings?.turnTimerSec || 0;
   const timerStart = Math.max(Date.now(), room.effectsQuietUntil || 0);
   room.turnEndsAt = seconds > 0 ? timerStart + seconds * 1000 : null;
@@ -1431,6 +1528,10 @@ function startTurn(room, samePlayer = false) {
   }
 
   const player = activePlayer(room);
+  if (consumeRandomTurnForfeit(room, player)) {
+    advanceTurnWithoutAdditional(room);
+    return;
+  }
   const card = drawCard(room);
   if (!card || !player) {
     addLog(room, 'No activity card was available.');
@@ -1579,7 +1680,9 @@ function checkGameEnd(room) {
   room.endedAt = Date.now();
   for (const p of room.players) {
     p.randomAway = false;
+    p.randomTurnForfeit = false;
     clearRandomAwayTimer(room, p.id);
+    clearRandomForfeitTimer(room, p.id);
   }
   const sorted = [...room.players].sort((a, b) => b.score - a.score);
   const high = sorted[0]?.score || 0;
@@ -1843,6 +1946,12 @@ function validateTray(trayRaw, leftDotsRaw) {
 function applySecret(room, player, tray, leftDots, sourceName = player.name) {
   const result = validateTray(tray, leftDots);
   if (!result.ok) return result;
+  if (!player?.isCpu && competitiveDictionaryRequired(room) && !COMPETITIVE_DICTIONARY.has(result.word)) {
+    return {
+      ok: false,
+      message: 'please use a valid word'
+    };
+  }
   player.word = result.word;
   player.trayPattern = result.tray;
   player.slots = result.slots;
@@ -1937,6 +2046,8 @@ function removePlayer(room, playerId, reason = 'removed') {
       room.disconnectTimers.delete(removed.id);
     }
     clearRandomAwayTimer(room, removed.id);
+    clearRandomForfeitTimer(room, removed.id);
+    removed.randomTurnForfeit = false;
 
     // Leaving should not leave stale AI timeouts or ghost turns behind.
     room.aiSerial++;
@@ -2466,6 +2577,7 @@ io.on('connection', (socket) => {
     const room = newRoom(socket.id, name, safeToken);
     if (cleanedAvatar) room.players[0].avatar = cleanedAvatar;
     room.randomOnline = true;
+    enforceRandomCompetitiveSettings(room);
     room.randomQueueOpen = true;
     room.randomWaitingSince = Date.now();
     room.randomCpuFallbackUsed = false;
@@ -2571,6 +2683,7 @@ io.on('connection', (socket) => {
     if ('manualReveal' in incoming) room.settings.manualReveal = !!incoming.manualReveal;
     if ('aiEnabled' in incoming) room.settings.aiEnabled = !!incoming.aiEnabled;
     if ('cpuDifficulty' in incoming && CPU_DIFFICULTIES.has(incoming.cpuDifficulty)) room.settings.cpuDifficulty = incoming.cpuDifficulty;
+    enforceRandomCompetitiveSettings(room);
 
     addLog(room, 'Host updated game settings.');
     broadcast(room);
@@ -2589,6 +2702,7 @@ io.on('connection', (socket) => {
       room.randomQueueOpen = false;
       room.randomWaitingSince = null;
       room.randomCpuFallbackUsed = true;
+      enforceRandomCompetitiveSettings(room);
     }
     broadcast(room);
   });
@@ -2605,6 +2719,7 @@ io.on('connection', (socket) => {
     room.randomQueueOpen = false;
     room.randomWaitingSince = null;
     room.randomCpuFallbackUsed = true;
+    enforceRandomCompetitiveSettings(room);
     addLog(room, 'Random Online fallback selected: playing against an Experimental CPU.');
     broadcast(room);
   });
@@ -2883,7 +2998,9 @@ io.on('connection', (socket) => {
       p.trayPattern = '';
       p.memory = {};
       p.randomAway = false;
+      p.randomTurnForfeit = false;
       clearRandomAwayTimer(room, p.id);
+      clearRandomForfeitTimer(room, p.id);
     }
     if (room.dailyPuzzle) {
       room.status = 'setup';
@@ -2976,7 +3093,7 @@ setInterval(() => {
         addLog(room, `Time ran out while waiting for ${getPlayer(room, room.awaitingExpose.playerId)?.name || 'a player'} to expose a slot.`);
         room.awaitingExpose = null;
       } else if (player) addLog(room, `${player.name} ran out of time.`);
-      advanceTurnAfterMiss(room);
+      advanceTurnWithoutAdditional(room);
       broadcast(room);
     }
   }
