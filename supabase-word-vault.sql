@@ -7,10 +7,14 @@ create table if not exists public.word_vault_users (
   verified boolean not null default false,
   verify_token text unique,
   player_token text not null unique,
+  avatar text,
   created_at timestamptz not null default now(),
   last_login_at timestamptz,
   verified_at timestamptz
 );
+
+alter table public.word_vault_users
+  add column if not exists avatar text;
 
 create table if not exists public.word_vault_sessions (
   token text primary key,

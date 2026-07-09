@@ -7,7 +7,7 @@ const { Server } = require('socket.io');
 
 const app = express();
 app.set('trust proxy', true);
-app.use(express.json({ limit: '128kb' }));
+app.use(express.json({ limit: '256kb' }));
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
@@ -149,14 +149,15 @@ function userRowToApp(row) {
     verified: !!row.verified,
     verifyToken: row.verify_token || '',
     playerToken: row.player_token,
+    avatar: row.avatar || '',
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at || null,
     verifiedAt: row.verified_at || null
   };
 }
 
-function userToRow(user) {
-  return {
+function userToRow(user, { includeAvatar = true } = {}) {
+  const row = {
     id: user.id,
     name: user.name,
     email: user.email,
@@ -169,6 +170,8 @@ function userToRow(user) {
     last_login_at: user.lastLoginAt || null,
     verified_at: user.verifiedAt || null
   };
+  if (includeAvatar) row.avatar = user.avatar || null;
+  return row;
 }
 
 function cacheUser(user) {
@@ -208,9 +211,14 @@ function publicAccountUser(user) {
     email: user.email,
     verified: !!user.verified,
     playerToken: user.playerToken,
+    avatar: user.avatar || '',
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt || null
   };
+}
+
+function isMissingAvatarColumnError(err) {
+  return /avatar/i.test(String(err?.message || '')) && /column|schema cache|could not find/i.test(String(err?.message || ''));
 }
 
 async function findUserByEmail(email) {
@@ -231,7 +239,12 @@ async function findUserByVerifyToken(token) {
 
 async function createUserRecord(user) {
   if (supabaseConfigured()) {
-    await supabaseRequest('word_vault_users', { method: 'POST', body: userToRow(user), single: true });
+    try {
+      await supabaseRequest('word_vault_users', { method: 'POST', body: userToRow(user), single: true });
+    } catch (err) {
+      if (!isMissingAvatarColumnError(err)) throw err;
+      await supabaseRequest('word_vault_users', { method: 'POST', body: userToRow(user, { includeAvatar: false }), single: true });
+    }
     return cacheUser(user);
   }
   accountDb.users[user.id] = user;
@@ -241,7 +254,12 @@ async function createUserRecord(user) {
 
 async function updateUserRecord(user) {
   if (supabaseConfigured()) {
-    await supabaseRequest('word_vault_users', { method: 'PATCH', query: { id: `eq.${user.id}` }, body: userToRow(user) });
+    try {
+      await supabaseRequest('word_vault_users', { method: 'PATCH', query: { id: `eq.${user.id}` }, body: userToRow(user) });
+    } catch (err) {
+      if (!isMissingAvatarColumnError(err)) throw err;
+      await supabaseRequest('word_vault_users', { method: 'PATCH', query: { id: `eq.${user.id}` }, body: userToRow(user, { includeAvatar: false }) });
+    }
     return cacheUser(user);
   }
   accountDb.users[user.id] = user;
@@ -644,6 +662,58 @@ app.get('/api/account/me', async (req, res) => {
   res.json({ user: publicAccountUser(user) });
 });
 
+app.post('/api/account/update', async (req, res) => {
+  const user = await sessionUser(req.get('x-word-vault-session') || req.body?.session).catch(() => null);
+  if (!user) return res.status(401).json({ error: 'Sign in first.' });
+
+  const nextName = req.body?.name !== undefined ? cleanName(req.body.name) : user.name;
+  const nextEmail = req.body?.email !== undefined ? cleanEmail(req.body.email) : user.email;
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  const emailChanged = nextEmail !== user.email;
+  const passwordChanged = !!newPassword;
+  const avatarProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'avatar');
+
+  if (!validEmail(nextEmail)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  if ((emailChanged || passwordChanged) && !verifyPassword(currentPassword, user)) {
+    return res.status(401).json({ error: 'Current password is required for email or password changes.' });
+  }
+  if (passwordChanged && newPassword.length < 8) return res.status(400).json({ error: 'Use at least 8 characters for your new password.' });
+
+  try {
+    if (emailChanged) {
+      const existing = await findUserByEmail(nextEmail);
+      if (existing && existing.id !== user.id) return res.status(409).json({ error: 'An account with that email already exists.' });
+      user.email = nextEmail;
+      user.verified = false;
+      user.verifyToken = makeToken('verify_');
+      user.verifiedAt = null;
+    }
+
+    user.name = nextName;
+    if (passwordChanged) {
+      const passwordData = hashPassword(newPassword);
+      user.passwordHash = passwordData.hash;
+      user.passwordSalt = passwordData.salt;
+    }
+    if (avatarProvided) {
+      const cleanedAvatar = cleanAvatarData(req.body.avatar);
+      if (cleanedAvatar === null) return res.status(400).json({ error: 'Avatar must be a small PNG, JPG, or WebP image.' });
+      user.avatar = cleanedAvatar;
+    }
+
+    await updateUserRecord(user);
+    let emailItem = null;
+    if (emailChanged) emailItem = await queueAccountEmail('verify-account', user, req);
+    const emailMessage = emailChanged
+      ? (emailItem?.sent ? ' Verification email sent.' : ' Verification email queued locally.')
+      : '';
+    res.json({ user: publicAccountUser(user), message: `Account updated.${emailMessage}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not update account.' });
+  }
+});
+
 app.post('/api/account/logout', async (req, res) => {
   const token = String(req.get('x-word-vault-session') || req.body?.session || '').trim();
   await deleteSessionRecord(token).catch(() => {});
@@ -1000,6 +1070,7 @@ function newRoom(hostSocketId, hostName, hostToken) {
     currentTheme: null,
     turnEndsAt: null,
     players: [hostPlayer],
+    spectators: [],
     deck: makeDeck(),
     discard: [],
     currentCard: null,
@@ -1100,6 +1171,10 @@ function getRoomOfSocket(socketId) {
   for (const room of rooms.values()) if (room.players.some(p => p.socketId === socketId)) return room;
   return null;
 }
+function getSpectatorRoomOfSocket(socketId) {
+  for (const room of rooms.values()) if ((room.spectators || []).some(s => s.socketId === socketId)) return room;
+  return null;
+}
 
 function getPlayer(room, playerId) { return room.players.find(p => p.id === playerId); }
 function getPlayerByToken(room, token) { return room.players.find(p => p.token === token); }
@@ -1160,7 +1235,8 @@ function canTakeTurn(room, player) {
 }
 function turnEligiblePlayers(room) { return room.players.filter(p => canTakeTurn(room, p)); }
 function gameIntroActive(room) { return !!(room && room.status === 'playing' && (room.startingIntro || room.rulesIntroPending)); }
-function gameActionsReady(room) { return !!(room && room.status === 'playing' && !room.startingIntro && !room.rulesIntroPending); }
+function roomAnnouncementsReady(room) { return !room?.effectsQuietUntil || room.effectsQuietUntil <= Date.now(); }
+function gameActionsReady(room) { return !!(room && room.status === 'playing' && !room.startingIntro && !room.rulesIntroPending && roomAnnouncementsReady(room)); }
 function starterSpinPlayers(room) {
   return room.players
     .filter(p => p.slots && isConnectedForTurn(p))
@@ -1337,7 +1413,8 @@ function drawCard(room) {
 
 function setTurnTimer(room) {
   const seconds = room.settings?.turnTimerSec || 0;
-  room.turnEndsAt = seconds > 0 ? Date.now() + seconds * 1000 : null;
+  const timerStart = Math.max(Date.now(), room.effectsQuietUntil || 0);
+  room.turnEndsAt = seconds > 0 ? timerStart + seconds * 1000 : null;
 }
 
 function startTurn(room, samePlayer = false) {
@@ -1625,13 +1702,15 @@ function finalResults(room) {
   });
 }
 
-function publicState(room, viewerId) {
+function publicState(room, viewerId, flags = {}) {
   const active = room.status === 'playing' ? activePlayer(room) : null;
   const viewer = getPlayer(room, viewerId);
+  const spectator = !!flags.spectator || !viewer;
   return {
     code: room.code,
     status: room.status,
-    isHost: room.hostId === viewerId,
+    isHost: !spectator && room.hostId === viewerId,
+    spectator,
     youId: viewerId,
     activePlayerId: active?.id || null,
     activePlayerName: active?.name || '',
@@ -1663,8 +1742,9 @@ function publicState(room, viewerId) {
       hiddenCount: hiddenCount(p),
       allExposed: p.slots ? allExposed(p) : false,
       publicSlots: makePublicSlots(p),
-      privateSlots: p.id === viewerId ? makePrivateSlots(p) : null,
+      privateSlots: !spectator && p.id === viewerId ? makePrivateSlots(p) : null,
     })),
+    spectators: (room.spectators || []).map(s => ({ id: s.id, name: s.name, connected: true })),
     log: room.log,
     effects: room.effects || [],
     endedReason: room.endedReason,
@@ -1695,6 +1775,9 @@ function publicState(room, viewerId) {
 function broadcast(room) {
   for (const p of room.players) {
     if (p.connected && p.socketId) io.to(p.socketId).emit('state', publicState(room, p.id));
+  }
+  for (const spectator of (room.spectators || [])) {
+    if (spectator.socketId) io.to(spectator.socketId).emit('state', publicState(room, spectator.id, { spectator: true }));
   }
   maybeScheduleAi(room);
 }
@@ -1896,7 +1979,7 @@ function rememberCpuMiss(cpu, targetId, symbol) {
 }
 
 function askSymbolInternal(room, asker, target, symbol) {
-  if (gameIntroActive(room)) return { ok: false, message: 'Wait for the starting randomizer to finish.' };
+  if (!gameActionsReady(room)) return { ok: false, message: 'Wait for the card or result animation to finish.' };
   if (room.awaitingExpose) return { ok: false, message: 'Wait for the pending exposure choice first.' };
   if (!asker || activePlayer(room)?.id !== asker.id) return { ok: false, message: 'It is not your turn.' };
   if (!target || target.id === asker.id) return { ok: false, message: 'Choose a valid opponent.' };
@@ -1962,6 +2045,7 @@ function askSymbolInternal(room, asker, target, symbol) {
 }
 
 function chooseExposeInternal(room, target, idx) {
+  if (!gameActionsReady(room)) return { ok: false, message: 'Wait for the card or result animation to finish.' };
   const pending = room.awaitingExpose;
   if (!pending) return { ok: false, message: 'There is no exposure choice pending.' };
   if (!target || pending.playerId !== target.id) return { ok: false, message: 'This exposure choice is not yours.' };
@@ -1985,6 +2069,7 @@ function chooseExposeInternal(room, target, idx) {
 }
 
 function manualExposeInternal(room, target, idx, scorerId) {
+  if (!gameActionsReady(room)) return { ok: false, message: 'Wait for the card or result animation to finish.' };
   if (!room.settings.manualReveal) return { ok: false, message: 'Click-to-expose mode is turned off.' };
   if (!target?.slots) return { ok: false, message: 'That player has no tray.' };
   const slot = target.slots[idx];
@@ -2199,7 +2284,7 @@ function autoResolveCpuExpose(room) {
 
 function maybeScheduleAi(room) {
   if (room.status !== 'playing') return;
-  if (!gameActionsReady(room)) return;
+  if (gameIntroActive(room)) return;
   if (room.aiTimer) return;
 
   // v4.23: an active CPU may be waiting on a human player to flip the correct card.
@@ -2220,8 +2305,12 @@ function maybeScheduleAi(room) {
     room.aiTimer = null;
     if (serial !== room.aiSerial) return;
     if (room.status !== 'playing') return;
-    if (!gameActionsReady(room)) return;
+    if (gameIntroActive(room)) return;
     if ((room.effectsQuietUntil || 0) > Date.now()) {
+      maybeScheduleAi(room);
+      return;
+    }
+    if (!gameActionsReady(room)) {
       maybeScheduleAi(room);
       return;
     }
@@ -2242,6 +2331,7 @@ function maybeScheduleAi(room) {
 }
 
 function guessFullInternal(room, guesser, target, guess, interruptive) {
+  if (!gameActionsReady(room)) return { ok: false, message: 'Wait for the card or result animation to finish.' };
   if (!guesser || !target || target.id === guesser.id) return { ok: false, message: 'Choose a valid opponent.' };
   const isInterrupt = !!interruptive;
   const active = activePlayer(room);
@@ -2410,6 +2500,25 @@ io.on('connection', (socket) => {
     if (room.randomOnline && room.randomQueueOpen && connectedHumanOnlinePlayers(room).length >= 2) markRandomRoomMatched(room);
     socket.emit('joined', { code: room.code, playerId: player.id, token: safeToken });
     addLog(room, `${player.name} joined the room.`);
+    broadcast(room);
+  });
+
+  socket.on('spectateRoom', ({ code, name, token } = {}) => {
+    const room = rooms.get(String(code || '').trim().toUpperCase());
+    if (!room) return emitError(socket, 'Room not found. Check the room code.');
+    const safeToken = cleanToken(token || makeToken('spec_'));
+    room.spectators = (room.spectators || []).filter(s => s.token !== safeToken && s.socketId !== socket.id);
+    const spectator = {
+      id: `spec_${safeToken.slice(0, 18)}`,
+      token: safeToken,
+      name: cleanName(name || 'Spectator'),
+      socketId: socket.id,
+      joinedAt: Date.now()
+    };
+    room.spectators.push(spectator);
+    socket.join(room.code);
+    socket.emit('joined', { code: room.code, playerId: spectator.id, token: safeToken, spectator: true });
+    addLog(room, `${spectator.name} is spectating.`);
     broadcast(room);
   });
 
@@ -2645,7 +2754,7 @@ io.on('connection', (socket) => {
   socket.on('verbalMiss', ({ dotPenalty, actorId }) => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
-    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
+    if (!gameActionsReady(room)) return emitError(socket, 'Wait for the card or result animation to finish.');
     if (room.awaitingExpose) return emitError(socket, 'Resolve the pending exposure first.');
     const actor = resolveActor(room, socket, actorId);
     if (!actor || activePlayer(room)?.id !== actor.id) return emitError(socket, 'It is not your turn.');
@@ -2723,7 +2832,7 @@ io.on('connection', (socket) => {
   socket.on('forceNextTurn', () => {
     const room = getRoomOfSocket(socket.id);
     if (!room || room.status !== 'playing') return emitError(socket, 'No active game.');
-    if (gameIntroActive(room)) return emitError(socket, 'Wait for the starting randomizer to finish.');
+    if (!gameActionsReady(room)) return emitError(socket, 'Wait for the card or result animation to finish.');
     const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Only the host can force the next turn.');
     room.awaitingExpose = null;
@@ -2788,7 +2897,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leaveRoom', () => {
-    const room = getRoomOfSocket(socket.id);
+    let room = getRoomOfSocket(socket.id);
+    const spectatorRoom = room ? null : getSpectatorRoomOfSocket(socket.id);
+    if (spectatorRoom) {
+      spectatorRoom.spectators = (spectatorRoom.spectators || []).filter(s => s.socketId !== socket.id);
+      socket.leave(spectatorRoom.code);
+      broadcast(spectatorRoom);
+      return;
+    }
     if (!room) return;
     const player = socketPlayer(room, socket);
     if (!player) return;
@@ -2802,6 +2918,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    const spectatorRoom = getSpectatorRoomOfSocket(socket.id);
+    if (spectatorRoom) {
+      spectatorRoom.spectators = (spectatorRoom.spectators || []).filter(s => s.socketId !== socket.id);
+      broadcast(spectatorRoom);
+      return;
+    }
     const room = getRoomOfSocket(socket.id);
     if (!room) return;
     const player = socketPlayer(room, socket);
@@ -2848,7 +2970,7 @@ setInterval(() => {
       continue;
     }
 
-    if (room.status === 'playing' && room.turnEndsAt && now >= room.turnEndsAt) {
+    if (room.status === 'playing' && room.turnEndsAt && now >= room.turnEndsAt && roomAnnouncementsReady(room)) {
       const player = activePlayer(room);
       if (room.awaitingExpose) {
         addLog(room, `Time ran out while waiting for ${getPlayer(room, room.awaitingExpose.playerId)?.name || 'a player'} to expose a slot.`);

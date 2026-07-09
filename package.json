@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.58",
-  "description": "Word Vault visual ring lock and video stability hardening.",
+  "version": "1.4.59",
+  "description": "Word Vault turn readiness, profile center, spectators, sharing, QR invites, and growth features.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
