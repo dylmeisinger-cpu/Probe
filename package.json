@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.61",
-  "description": "Word Vault random competitive 40-second turns, away forfeits, and strict daily/random dictionary validation.",
+  "version": "1.4.62",
+  "description": "Word Vault expanded themes, daily solve-only puzzle flow, private theme selection, and 1v1 challenge mode.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -764,7 +764,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms = new Map();
 
-const THEMES = [
+const CORE_THEMES = [
   { id: 'medical', name: 'Medical', emoji: '⚕️', examples: ['DOCTOR', 'VACCINE', 'SURGERY', 'HOSPITAL', 'FEVER', 'BANDAGE'], words: ['DOCTOR','NURSE','VACCINE','SURGERY','HOSPITAL','MEDICINE','BANDAGE','THERAPY','FEVER','CLINIC','SYRINGE','PATIENT','DENTIST','PHARMACY','BLOOD','VIRUS','HEART','BRAIN','X RAY'.replace(' ',''),'SCALPEL','PULSE','ALLERGY','ASTHMA','CAST'] },
   { id: 'animals', name: 'Animals', emoji: '🐾', examples: ['TIGER', 'DOLPHIN', 'RABBIT', 'FALCON', 'LIZARD'], words: ['TIGER','DOLPHIN','RABBIT','FALCON','LIZARD','PENGUIN','ELEPHANT','GIRAFFE','WOLF','EAGLE','SHARK','TURTLE','BEAVER','COYOTE','HORSE','BADGER','OTTER','MOOSE','PANDA','GORILLA','OCTOPUS','LOBSTER'] },
   { id: 'tools', name: 'Tools', emoji: '🧰', examples: ['HAMMER', 'WRENCH', 'DRILL', 'LADDER', 'PLIERS'], words: ['HAMMER','WRENCH','DRILL','LADDER','PLIERS','SAW','RATCHET','SCREWDRIVER','CHISEL','SANDER','GRINDER','LEVEL','CLAMP','ANVIL','TORCH','SHOVEL','ROUTER','TAPE','MALLET','AUGER'] },
@@ -776,6 +776,78 @@ const THEMES = [
   { id: 'video_games', name: 'Video Games', emoji: '🎮', examples: ['BOSS', 'QUEST', 'ARCADE', 'PORTAL', 'HEALER'], words: ['BOSS','QUEST','ARCADE','PORTAL','HEALER','MAGE','CASTLE','LOOT','SHIELD','DUNGEON','AVATAR','PIXEL','COMBO','RESPAWN','LEVEL','COIN','DRAGON','ROBOT','SNIPER','RACING'] },
   { id: 'random_hard', name: 'Random Hard Mode', emoji: '🧩', examples: ['CRYPTIC', 'JIGSAW', 'QUARTZ', 'ZEPHYR', 'JINX'], words: ['CRYPTIC','JIGSAW','QUARTZ','ZEPHYR','JINX','OXYGEN','VORTEX','GALAXY','PUZZLE','MYSTERY','COBALT','WIZARD','JAZZ','ZODIAC','FJORD','PIXEL','GLYPH','ONYX','NYMPH','KAYAK'] }
 ];
+
+const BROAD_THEME_NAMES = [
+  'Science','Technology','Nature','Space','Mythology','History','Transportation','Sports','Biology','Music',
+  'Geography','Literature','Architecture','Chemistry','Government','Household Objects','Weather','Entertainment','Art','Food',
+  'Animals','Plants','Ocean','Mountains','Cities','Travel','Education','Medicine','Energy','Engineering',
+  'Mathematics','Language','Writing','Theater','Dance','Fashion','Photography','Film','Television','Radio',
+  'Internet Culture','Games','Video Games','Board Games','Card Games','Puzzles','Mystery','Adventure','Exploration','Discovery',
+  'Invention','Industry','Farming','Gardening','Cooking','Baking','Restaurants','Markets','Shopping','Money',
+  'Business','Work','Careers','Tools','Machines','Robotics','Computers','Phones','Communication','Social Life',
+  'Family','Friendship','School','College','Books','Libraries','Museums','Parks','Forests','Deserts',
+  'Rivers','Lakes','Islands','Beaches','Caves','Volcanoes','Earth','Climate','Seasons','Winter',
+  'Spring','Summer','Autumn','Holidays','Festivals','Celebrations','Traditions','Myths and Legends','Ancient World','Medieval Life',
+  'Modern Life','Future','Time','Memory','Dreams','Emotions','Senses','Color','Light','Sound',
+  'Motion','Speed','Strength','Balance','Shape','Patterns','Numbers','Maps','Navigation','Survival',
+  'Safety','Health','Fitness','Outdoors','Camping','Hiking','Boating','Aviation','Railways','Roads',
+  'Vehicles','Buildings','Bridges','Towers','Homes','Furniture','Kitchen','Bathroom','Office','Workshop',
+  'Clothing','Jewelry','Toys','Pets','Wildlife','Insects','Birds','Reptiles','Fish','Marine Life',
+  'Trees','Flowers','Seeds','Fruit','Vegetables','Desserts','Drinks','Breakfast','Dinner','Snacks',
+  'Spices','Restaurants and Cafes','Sports Equipment','Team Sports','Individual Sports','Winter Sports','Water Sports','Racing','Olympics','Competition',
+  'Performance','Stage','Concerts','Instruments','Songs','Genres','Artists','Stories','Heroes','Villains',
+  'Creatures','Magic','Fantasy','Science Fiction','Superheroes','Crime','Comedy','Drama','Animation','Documentaries',
+  'News','Journalism','Politics','Law','Courts','Public Service','Military','Emergency Services','Fire and Rescue','Police Work',
+  'Medicine and Care','Hospitals','Pharmacy','Dentistry','Vision','Nutrition','Sleep','Mind','Brain','Heart',
+  'Genetics','Evolution','Ecosystems','Conservation','Recycling','Pollution','Oceans and Weather','Astronomy','Planets','Stars',
+  'Galaxies','Rockets','Satellites','Laboratories','Experiments','Minerals','Metals','Electricity','Magnetism','Forces',
+  'Materials','Textiles','Wood','Stone','Glass','Plastic','Paper','Printing','Design','Crafts',
+  'Painting','Sculpture','Drawing','Ceramics','Architecture and Design','Interior Design','Gardens','Landscapes','City Life','Country Life',
+  'Night','Morning','Storms','Sunshine','Rain','Snow','Wind','Fire','Water','Ice',
+  'Destruction','Creation','Repair','Building','Hidden Things','Secrets','Codes','Signals','Symbols','Riddles',
+  'Luck','Strategy','Risk','Treasure','Trade','Voyages','Pirates','Knights','Royalty','Religion',
+  'Philosophy','Ideas','Beliefs','Customs','World Cultures','Ancient Egypt','Ancient Greece','Ancient Rome','Asia','Africa',
+  'Europe','North America','South America','Australia','Arctic','Tropics','Language Arts','Grammar','Poetry','Comics',
+  'Magazines','Newspapers','Advertising','Brands','Logos','Packages','Collections','Hobbies','DIY','Repairs',
+  'Cleaning','Storage','Organization','Measurement','Cooking Tools','Garden Tools','Office Supplies','School Supplies','Electronics','Appliances',
+  'Cameras','Audio','Video','Streaming','Online Communities','Memes','Challenges','Trends','Famous People','Celebrities',
+  'Athletes','Scientists','Explorers','Inventors','Leaders','Artists and Makers','Writers','Musicians','Actors','Directors',
+  'Workers','Builders','Drivers','Pilots','Sailors','Farmers','Chefs','Teachers','Doctors and Nurses','Scientists and Engineers',
+  'Banking','Investing','Real Estate','Travel Places','Hotels','Airports','Stations','Harbors','Stadiums','Theaters',
+  'Factories','Farms','Mines','Warehouses','Courtyards','Castles','Temples','Schools and Campuses','Playgrounds','Neighborhoods',
+  'Tools and Hardware','Locks and Keys','Doors and Windows','Containers','Bags','Boxes','Bottles','Shelves','Chairs and Tables','Beds',
+  'Breakfast Foods','Street Food','Fruit and Candy','Breads','Cheese and Dairy','Meat and Seafood','Soups','Sauces','Picnics','Feasts',
+  'Animal Habitats','Animal Sounds','Animal Movement','Plant Parts','Natural Materials','Natural Disasters','World Records','Fast Things','Slow Things','Tiny Things',
+  'Giant Things','Round Things','Sharp Things','Soft Things','Heavy Things','Fragile Things','Bright Things','Dark Things','Old Things','New Things'
+];
+
+const THEME_EXAMPLE_BANK = [
+  ['PLANET','ROCKET','ORBIT','LASER','COMET'],
+  ['FOREST','RIVER','FLOWER','STONE','STORM'],
+  ['MUSIC','PIANO','GUITAR','SONG','STAGE'],
+  ['BRIDGE','TOWER','HOUSE','MARKET','HOTEL'],
+  ['PLAYER','TROPHY','RACING','TENNIS','SOCCER'],
+  ['BOOK','SCRIPT','POEM','WRITER','STORY'],
+  ['HAMMER','WRENCH','CABLE','ENGINE','ROBOT'],
+  ['PIZZA','BREAD','CHEESE','SALMON','COOKIE']
+];
+
+function themeIdFromName(name) {
+  return String(name || 'theme').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'theme';
+}
+
+function makeBroadTheme(name, index) {
+  const id = themeIdFromName(name);
+  const wordsFromName = String(name || '').toUpperCase().replace(/&/g, ' ').split(/[^A-Z]+/).filter(w => w.length >= 3 && w.length <= 12);
+  const bank = THEME_EXAMPLE_BANK[index % THEME_EXAMPLE_BANK.length];
+  return { id, name, emoji: '*', examples: [...new Set([...wordsFromName, ...bank])].slice(0, 5), words: [] };
+}
+
+const CORE_THEME_IDS = new Set(CORE_THEMES.map(t => t.id));
+const THEMES = [
+  ...CORE_THEMES,
+  ...BROAD_THEME_NAMES.map(makeBroadTheme).filter(t => !CORE_THEME_IDS.has(t.id))
+].slice(0, 300);
 
 const THEME_MAP = new Map(THEMES.map(t => [t.id, t]));
 const GENERAL_CPU_WORDS = ['ABOUT','ABOVE','ABROAD','ABSENT','ACCEPT','ACCESS','ACCIDENT','ACCOUNT','ACID','ACORN','ACRYLIC','ACTION','ACTIVE','ACTOR','ACUTE','ADAPT','ADDED','ADDRESS','ADJUST','ADMIT','ADULT','ADVICE','AFFAIR','AFTER','AGAIN','AGENT','AGREE','AHEAD','ALARM','ALBUM','ALERT','ALIEN','ALIVE','ALLOW','ALMOST','ALONE','ALONG','ALTER','AMBER','ANCHOR','ANCIENT','ANGLE','ANIMAL','ANSWER','ANXIETY','APPLE','APRON','AREA','ARGUE','ARROW','ASHES','ASPECT','ATOM','ATTIC','AUDIO','AUTUMN','AVOID','AWARD','AWARE','AWFUL','BACK','BACON','BADGE','BAGEL','BAKER','BALCONY','BALLOON','BANANA','BANK','BARREL','BASIC','BASKET','BATTERY','BEACH','BEACON','BEAN','BEAUTY','BEFORE','BEGIN','BEHIND','BELIEF','BELL','BELT','BERRY','BETTER','BEYOND','BICYCLE','BIRD','BIRTH','BLANKET','BLAST','BLAZER','BLEND','BLIZZARD','BLOOM','BOARD','BOAT','BODY','BOLT','BONE','BONUS','BOOK','BORDER','BOTTLE','BOTTOM','BRAIN','BRANCH','BRAVE','BREAD','BRIDGE','BRIGHT','BROKEN','BRONZE','BROTHER','BRUSH','BUBBLE','BUCKET','BUDGET','BUILDER','BULLET','BUNDLE','BURGER','BUTTON','CABIN','CABLE','CAMERA','CANDLE','CANDY','CANVAS','CARBON','CARD','CAREFUL','CARPET','CASTLE','CASUAL','CATTLE','CAUSE','CEDAR','CENTER','CEREAL','CHAIN','CHAIR','CHANGE','CHARGE','CHEESE','CHERRY','CHEST','CHICKEN','CHOICE','CHURCH','CIRCLE','CITY','CLINIC','CLOCK','CLOSET','CLOUD','COACH','COAST','COBALT','COFFEE','COLLAR','COMEDY','COMMON','COMPASS','COPPER','CORNER','COTTON','COUNTY','COUPON','COYOTE','CRADLE','CRAFT','CRANE','CRASH','CRAYON','CREAM','CREDIT','CREEK','CRICKET','CRISP','CRYSTAL','CYCLE','DAMAGE','DANGER','DEALER','DECADE','DECENT','DECIDE','DEEPER','DEFEND','DEGREE','DELIGHT','DESERT','DESIGN','DESK','DETAIL','DEVICE','DIAMOND','DINNER','DIRECT','DOCTOR','DOLLAR','DONKEY','DOOR','DOUBLE','DRAGON','DRAWER','DREAM','DRESS','DRIFT','DRIVER','DUST','EAGLE','EARLY','EARTH','ECHO','EDITOR','EFFECT','EFFORT','ELBOW','ELECTRIC','EMBER','ENGINE','ENOUGH','ESCAPE','EVENT','EVERY','EXACT','EXCITE','EXHIBIT','FABRIC','FACTOR','FAMILY','FANCY','FARMER','FATHER','FAUCET','FAVOR','FEATHER','FEATURE','FENCE','FEVER','FIELD','FIGURE','FILTER','FINAL','FINGER','FINISH','FIRE','FISHING','FLAME','FLAVOR','FLEECE','FLIGHT','FLOAT','FLOWER','FOLDER','FOREST','FORK','FORMAT','FOSSIL','FOUNTAIN','FRAME','FREEDOM','FREEZER','FRIEND','FROST','FRUIT','FUTURE','GALAXY','GARAGE','GARDEN','GARLIC','GATHER','GENTLE','GHOST','GIANT','GIFT','GINGER','GLASS','GLOBE','GLORY','GOLDEN','GRAPE','GRAPH','GRASS','GRAVITY','GREEN','GRILL','GROUND','GUITAR','HAMMER','HANDLE','HARBOR','HARVEST','HAZEL','HEALTH','HEART','HEATER','HEIGHT','HELMET','HERO','HIDDEN','HIGHER','HOCKEY','HONEY','HORSE','HOSPITAL','HOTEL','HOUSE','HUNTER','ICEBERG','IDEA','IMAGE','IMPACT','INCOME','INDEX','INSECT','ISLAND','JACKET','JELLY','JEWEL','JOB','JOIN','JUDGE','JUICE','JUNGLE','KAYAK','KETTLE','KEYBOARD','KITCHEN','KNIGHT','LABEL','LADDER','LAGOON','LANTERN','LASER','LAUNCH','LAWYER','LEADER','LEAF','LEGEND','LEMON','LETTER','LIBRARY','LIGHT','LION','LIQUID','LITTLE','LIZARD','LOCKER','LOGIC','LOTION','LUMBER','LUNCH','MACHINE','MAGNET','MARBLE','MARKET','MASTER','MATRIX','MEDAL','MEDICINE','MEMORY','METAL','METHOD','MIDDLE','MINERAL','MIRROR','MOBILE','MODEL','MONKEY','MOON','MORNING','MOTHER','MOTION','MOUNTAIN','MOVIE','MUSEUM','MUSIC','MYSTERY','NATION','NEBULA','NEEDLE','NEON','NERVE','NEST','NEWSPAPER','NICKEL','NIGHT','NOBLE','NOODLE','NORTH','NUMBER','OBJECT','OCEAN','OFFICE','ORANGE','ORBIT','OXYGEN','PAINT','PALACE','PANCAKE','PAPER','PARADE','PARK','PARTNER','PASTA','PATIENT','PEACH','PEANUT','PENCIL','PEOPLE','PEPPER','PETAL','PHANTOM','PHONE','PHOTO','PIANO','PICNIC','PICTURE','PILLOW','PIRATE','PITCH','PIZZA','PLANET','PLASTIC','PLATE','PLAYER','POCKET','POINT','POLAR','POND','PORTAL','POWDER','PRAIRIE','PRESENT','PRINTER','PRISON','PROJECT','PULSE','PUZZLE','QUARTZ','QUEEN','QUICK','QUIET','RABBIT','RADIO','RAINBOW','RANCH','RANDOM','READER','REASON','RECORD','REFLEX','REGION','REMOTE','REPAIR','RESCUE','RESORT','RIBBON','RIVER','ROCKET','ROLLER','ROOF','ROOM','ROUTER','RUBBER','SADDLE','SALAD','SALMON','SANDWICH','SATURN','SAUCE','SCHOOL','SCIENCE','SCREEN','SCRIPT','SEASON','SECRET','SHADOW','SHELTER','SHIELD','SHOE','SIGNAL','SILVER','SINGER','SKETCH','SKIING','SLEEP','SLEEVES','SLIDER','SMOKE','SNACK','SNOW','SOCCER','SODIUM','SOLAR','SPARK','SPIDER','SPIRIT','SPLASH','SPRING','SQUARE','STADIUM','STAPLE','STAR','STATION','STEAM','STEEL','STONE','STORM','STORY','STREET','STRING','STUDENT','SUGAR','SUMMER','SUNSET','SURGERY','SWITCH','TABLE','TABLET','TARGET','TEMPLE','TENNIS','THEORY','THUNDER','TIGER','TIMBER','TOAST','TOKEN','TOMATO','TONGUE','TORCH','TOWER','TRACK','TRAIL','TRAIN','TREASURE','TROPHY','TUNNEL','TURTLE','UMBRELLA','UPDATE','VALLEY','VELVET','VIDEO','VILLAGE','VIOLET','VISION','VOYAGE','WALLET','WALNUT','WATER','WEALTH','WEATHER','WINDOW','WINTER','WIZARD','WOOD','WORKER','WORLD','WRENCH','WRITER','YELLOW','ZEBRA','ZEPHYR','ZODIAC'];
@@ -790,17 +862,41 @@ function seededNumber(seed) {
   return crypto.createHash('sha256').update(String(seed)).digest().readUInt32BE(0);
 }
 
+const DAILY_VAGUE_HINTS = [
+  'Often misunderstood','Connected to exploration','Associated with winter','Used throughout history','Famous for its colors',
+  'Lives near water','Known for incredible speed','Connected to mythology','Found in many homes','Tied to celebration',
+  'Linked with discovery','Seen during big events','Part of everyday life','A symbol of change','Connected to teamwork',
+  'Remembered from childhood','Useful in a crisis','Known for its shape','Often found outdoors','Connected to creativity',
+  'Appears in old stories','Part of modern culture','Follows a pattern','Can travel far','Built to last',
+  'Often shared','Harder than it looks','Connected to the sky','Associated with summer','Known for a strong sound',
+  'Often collected','Can be surprisingly valuable','Connected to movement','Found near crowds','A clue from history'
+];
+
+function dailyHintForKey(key) {
+  const month = Number(String(key).slice(5, 7));
+  const seasonal = month === 12 || month <= 2
+    ? ['Associated with winter', 'Found in cold places', 'Known for quiet nights']
+    : month >= 3 && month <= 5
+      ? ['Connected to renewal', 'Often seen in spring', 'Famous for its colors']
+      : month >= 6 && month <= 8
+        ? ['Associated with summer', 'Lives near water', 'Often found outdoors']
+        : ['Connected to change', 'Used throughout history', 'Known for its colors'];
+  const pool = [...seasonal, ...DAILY_VAGUE_HINTS];
+  return pool[seededNumber(`daily-hint:${key}`) % pool.length];
+}
+
 function dailyPuzzleFor(dateValue) {
   const key = dayKey(dateValue);
-  const theme = THEMES[seededNumber(`theme:${key}`) % THEMES.length] || THEMES[0];
-  const pool = (theme.words?.length ? theme.words : GENERAL_CPU_WORDS).filter(w => /^[A-Z]{3,12}$/.test(w));
-  const word = pool[seededNumber(`word:${key}:${theme.id}`) % pool.length] || 'PLANET';
+  const dailyPool = [...new Set([...CORE_THEMES.flatMap(t => t.words || []), ...GENERAL_CPU_WORDS])].filter(w => /^[A-Z]{3,12}$/.test(w));
+  const word = dailyPool[seededNumber(`daily-word:${key}`) % dailyPool.length] || 'PLANET';
+  const hint = dailyHintForKey(key);
   const difficulty = ['hard', 'genius'][seededNumber(`difficulty:${key}`) % 2];
   return {
     key,
     title: 'Daily Puzzle',
-    theme: { id: theme.id, name: theme.name, emoji: theme.emoji, examples: theme.examples },
-    clue: `${theme.name} word, ${word.length} letters`,
+    theme: { id: 'daily', name: 'Daily Puzzle', emoji: '*', examples: [] },
+    hint,
+    clue: `${hint}, ${word.length} letters`,
     difficulty,
     cpuName: 'Wolt',
     word
@@ -813,6 +909,7 @@ function publicDailyPuzzle(puzzle) {
     key: puzzle.key,
     title: puzzle.title,
     theme: puzzle.theme,
+    hint: puzzle.hint,
     clue: puzzle.clue,
     difficulty: puzzle.difficulty,
     cpuName: puzzle.cpuName,
@@ -1030,6 +1127,54 @@ function cleanName(name) {
   return String(name || 'Player').trim().replace(/\s+/g, ' ').slice(0, 24) || 'Player';
 }
 
+function cleanThemeName(name) {
+  return String(name || '').trim().replace(/\s+/g, ' ').replace(/[<>]/g, '').slice(0, 42);
+}
+
+function makeCustomTheme(name) {
+  const clean = cleanThemeName(name) || 'Custom Theme';
+  const idHash = crypto.createHash('sha1').update(clean.toLowerCase()).digest('hex').slice(0, 10);
+  const examples = clean.toUpperCase().split(/[^A-Z]+/).filter(w => w.length >= 3 && w.length <= 12).slice(0, 3);
+  return { id: `custom_${idHash}`, name: clean, emoji: '*', examples: examples.length ? examples : ['CUSTOM', 'PLAYER', 'IDEA'], words: [], custom: true };
+}
+
+function normalizeThemeMode(mode, useThemes = true) {
+  if (mode === 'host') return 'database';
+  if (['none', 'random', 'database', 'custom'].includes(String(mode || ''))) return String(mode);
+  return useThemes ? 'random' : 'none';
+}
+
+function normalizeThemeSelectionMethod(method) {
+  return ['host', 'vote', 'random'].includes(String(method || '')) ? String(method) : 'host';
+}
+
+function suggestionIdForThemeSuggestion(suggestion) {
+  if (!suggestion) return '';
+  if (suggestion.type === 'database') return `db:${suggestion.themeId}`;
+  return `custom:${themeIdFromName(suggestion.name || 'custom')}`;
+}
+
+function publicThemeSuggestion(room, suggestion) {
+  if (!suggestion) return null;
+  const player = getPlayer(room, suggestion.playerId);
+  const theme = suggestion.type === 'database' ? THEME_MAP.get(suggestion.themeId) : makeCustomTheme(suggestion.name);
+  if (!theme) return null;
+  return {
+    id: suggestion.id || suggestionIdForThemeSuggestion(suggestion),
+    playerId: suggestion.playerId,
+    playerName: player?.name || 'Player',
+    type: suggestion.type,
+    themeId: theme.id,
+    name: theme.name,
+    emoji: theme.emoji,
+    examples: theme.examples || []
+  };
+}
+
+function roomThemeSuggestions(room) {
+  return Object.values(room?.themeSuggestions || {}).map(s => publicThemeSuggestion(room, s)).filter(Boolean);
+}
+
 function cleanAvatarData(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -1072,8 +1217,10 @@ function defaultSettings() {
   return {
     turnTimerSec: 0,
     useThemes: false,
-    themeMode: 'random',
+    themeMode: 'none',
+    themeSelectionMethod: 'host',
     themeId: 'medical',
+    customThemeName: '',
     sharedDevice: false,
     manualReveal: false,
     aiEnabled: false,
@@ -1125,6 +1272,11 @@ function newRoom(hostSocketId, hostName, hostToken) {
     randomFallbackTimer: null,
     randomAwayTimers: new Map(),
     randomForfeitTimers: new Map(),
+    themeSuggestions: {},
+    themeVotes: {},
+    themeReveal: null,
+    challengeOffer: null,
+    challengeMode: null,
     dailyPuzzle: false,
     dailyPuzzleKey: '',
     dailyPuzzleInfo: null,
@@ -1253,6 +1405,7 @@ function allExposed(player) { return player.slots && player.slots.every(s => !sl
 function playablePlayers(room) { return room.players.filter(p => p.slots && !allExposed(p)); }
 function isConnectedForTurn(player) { return !!(player && (player.connected || player.isCpu || player.isLocal)); }
 function hasValidGuessTarget(room, player) {
+  if (room?.challengeMode) return !!(player && player.id === room.challengeMode.playerId && getPlayer(room, room.challengeMode.targetId)?.slots && !allExposed(getPlayer(room, room.challengeMode.targetId)));
   return !!(player && player.slots && room.players.some(p => p.id !== player.id && p.slots && !allExposed(p)));
 }
 function canTakeTurn(room, player) {
@@ -1261,7 +1414,7 @@ function canTakeTurn(room, player) {
 function turnEligiblePlayers(room) { return room.players.filter(p => canTakeTurn(room, p)); }
 function gameIntroActive(room) { return !!(room && room.status === 'playing' && (room.startingIntro || room.rulesIntroPending)); }
 function roomAnnouncementsReady(room) { return !room?.effectsQuietUntil || room.effectsQuietUntil <= Date.now(); }
-function gameActionsReady(room) { return !!(room && room.status === 'playing' && !room.startingIntro && !room.rulesIntroPending && roomAnnouncementsReady(room)); }
+function gameActionsReady(room) { return !!(room && room.status === 'playing' && !room.startingIntro && !room.rulesIntroPending && !room.challengeOffer && roomAnnouncementsReady(room)); }
 function starterSpinPlayers(room) {
   return room.players
     .filter(p => p.slots && isConnectedForTurn(p))
@@ -1285,11 +1438,22 @@ function markRandomRoomMatched(room) {
   room.randomWaitingSince = null;
   room.randomMatchedAt = Date.now();
   enforceRandomCompetitiveSettings(room);
+  assignRandomOnlineTheme(room);
 }
 
 function enforceRandomCompetitiveSettings(room) {
   if (!room?.randomOnline) return;
   room.settings.turnTimerSec = RANDOM_COMPETITIVE_TURN_TIMER_SEC;
+}
+
+function assignRandomOnlineTheme(room) {
+  if (!room?.randomOnline) return;
+  const useTheme = Math.random() < 0.5;
+  room.settings.themeMode = useTheme ? 'random' : 'none';
+  room.settings.useThemes = useTheme;
+  room.settings.themeSelectionMethod = 'random';
+  room.settings.customThemeName = '';
+  room.currentTheme = useTheme ? rand(THEMES) : null;
 }
 
 function clearRandomFallbackTimer(room) {
@@ -1532,6 +1696,12 @@ function startTurn(room, samePlayer = false) {
     advanceTurnWithoutAdditional(room);
     return;
   }
+  if (room.challengeMode && player?.id === room.challengeMode.playerId) {
+    room.currentCard = null;
+    addLog(room, `${player.name} is continuing the 1v1 challenge at ${challengeMultiplier(room).toFixed(1)}x.`);
+    setChallengeTimer(room);
+    return;
+  }
   const card = drawCard(room);
   if (!card || !player) {
     addLog(room, 'No activity card was available.');
@@ -1629,6 +1799,60 @@ function addWordSolvedEffect(room, target, actorId = null) {
   });
 }
 
+function challengeMultiplier(room) {
+  return Math.max(0.2, Number(room?.challengeMode?.multiplier || 1));
+}
+
+function setChallengeTimer(room) {
+  room.turnEndsAt = Date.now() + 10000;
+}
+
+function afterChallengeGuess(room) {
+  if (!room?.challengeMode || room.status !== 'playing') return;
+  room.challengeMode.guesses = (room.challengeMode.guesses || 0) + 1;
+  room.challengeMode.multiplier = Math.max(0.2, Number((challengeMultiplier(room) - 0.2).toFixed(2)));
+  setChallengeTimer(room);
+}
+
+function finishRoom(room, reason) {
+  if (!room || room.status === 'ended') return;
+  room.status = 'ended';
+  room.turnEndsAt = null;
+  room.challengeOffer = null;
+  room.challengeMode = null;
+  room.endedAt = Date.now();
+  for (const p of room.players) {
+    p.randomAway = false;
+    p.randomTurnForfeit = false;
+    clearRandomAwayTimer(room, p.id);
+    clearRandomForfeitTimer(room, p.id);
+  }
+  const sorted = [...room.players].sort((a, b) => b.score - a.score);
+  const high = sorted[0]?.score || 0;
+  const winners = sorted.filter(p => p.score === high).map(p => p.name);
+  room.endedReason = reason || (room.dailyPuzzle
+    ? 'Daily Puzzle complete. The CPU word was solved.'
+    : `Game over. Winner: ${winners.join(', ')} with ${high} points.`);
+  addLog(room, room.endedReason);
+  if (room.dailyPuzzle) {
+    room.dailyFinishedAt = room.endedAt;
+    saveDailyLeaderboardEntry(room);
+  }
+}
+
+function maybeCreateChallengeOffer(room, solvedTarget, scorerId) {
+  if (!room || room.dailyPuzzle || room.challengeMode || room.challengeOffer) return false;
+  const scorer = getPlayer(room, scorerId);
+  if (!solvedTarget || !scorer || solvedTarget.id === scorer.id || solvedTarget.isCpu || scorer.isCpu) return false;
+  const humans = room.players.filter(p => !p.isCpu);
+  if (humans.length !== 2 || allExposed(scorer)) return false;
+  room.challengeOffer = { playerId: solvedTarget.id, targetId: scorer.id, offeredAt: Date.now() };
+  room.turnEndsAt = null;
+  addLog(room, `${solvedTarget.name} can accept defeat or continue challenging ${scorer.name}'s word.`);
+  addEffect(room, 'challenge-offer', `${solvedTarget.name}: accept defeat or continue the challenge.`, { actorId: solvedTarget.id, targetId: scorer.id });
+  return true;
+}
+
 function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1) {
   if (!target?.slots) return { ok: false, points: 0 };
   const slot = target.slots[index];
@@ -1640,7 +1864,7 @@ function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1
   let scorerName = null;
 
   if (scoringPlayerId) {
-    points = base * multiplier;
+    points = Math.round(base * multiplier);
     const scorer = getPlayer(room, scoringPlayerId);
     if (scorer) {
       scorer.score += points;
@@ -1657,7 +1881,7 @@ function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1
   }
 
   const solvedNow = allExposed(target);
-  if ((reason === 'guess' || reason === 'manual') && solvedNow && scoringPlayerId) {
+  if ((reason === 'guess' || reason === 'manual') && solvedNow && scoringPlayerId && !room.challengeMode) {
     const scorer = getPlayer(room, scoringPlayerId);
     if (scorer) scorer.score += 50;
     addLog(room, `${scorerName} earned a 50 point bonus for exposing ${target.name}'s final hidden space.`);
@@ -1665,36 +1889,19 @@ function revealSlot(room, target, index, scoringPlayerId, reason, multiplier = 1
 
   addEffect(room, 'correct', `${scorerName || 'A player'} revealed ${target.name}'s ${visible}.`, { targetId: target.id, scorerId: scoringPlayerId, slotIndex: index, symbol: slot.ch, points });
   if (solvedNow) addWordSolvedEffect(room, target, scoringPlayerId || null);
+  if (solvedNow && scoringPlayerId) maybeCreateChallengeOffer(room, target, scoringPlayerId);
   checkGameEnd(room);
   return { ok: true, points };
 }
 
 function checkGameEnd(room) {
   if (room.status !== 'playing') return;
+  if (room.challengeOffer) return;
   const done = room.dailyPuzzle
     ? room.players.some(p => p.isCpu && p.slots && p.slots.every(s => !slotHasCard(s) || s.revealed))
     : room.players.every(p => p.slots && p.slots.every(s => !slotHasCard(s) || s.revealed));
   if (!done) return;
-  room.status = 'ended';
-  room.turnEndsAt = null;
-  room.endedAt = Date.now();
-  for (const p of room.players) {
-    p.randomAway = false;
-    p.randomTurnForfeit = false;
-    clearRandomAwayTimer(room, p.id);
-    clearRandomForfeitTimer(room, p.id);
-  }
-  const sorted = [...room.players].sort((a, b) => b.score - a.score);
-  const high = sorted[0]?.score || 0;
-  const winners = sorted.filter(p => p.score === high).map(p => p.name);
-  room.endedReason = room.dailyPuzzle
-    ? 'Daily Puzzle complete. The CPU word was solved.'
-    : `Game over. Winner: ${winners.join(', ')} with ${high} points.`;
-  addLog(room, room.endedReason);
-  if (room.dailyPuzzle) {
-    room.dailyFinishedAt = room.endedAt;
-    saveDailyLeaderboardEntry(room);
-  }
+  finishRoom(room);
 }
 
 function nextConnectedTurnIndex(room, fromIndex) {
@@ -1723,6 +1930,7 @@ function ensureTurnEligible(room) {
 }
 
 function skipActiveIfNoValidTarget(room) {
+  if (room.challengeOffer) return true;
   if (room.status !== 'playing' || room.awaitingExpose) return false;
   const current = activePlayer(room);
   if (canTakeTurn(room, current)) return false;
@@ -1827,6 +2035,21 @@ function publicState(room, viewerId, flags = {}) {
     settings: room.settings,
     themes: THEMES.map(t => ({ id: t.id, name: t.name, emoji: t.emoji, examples: t.examples })),
     currentTheme: publicTheme(room),
+    themeSuggestions: roomThemeSuggestions(room),
+    themeVotes: room.themeVotes || {},
+    myThemeVote: !spectator ? (room.themeVotes || {})[viewerId] || '' : '',
+    myThemeSuggestion: !spectator ? publicThemeSuggestion(room, (room.themeSuggestions || {})[viewerId]) : null,
+    challengeOffer: room.challengeOffer ? {
+      ...room.challengeOffer,
+      playerName: getPlayer(room, room.challengeOffer.playerId)?.name || 'Player',
+      targetName: getPlayer(room, room.challengeOffer.targetId)?.name || 'opponent'
+    } : null,
+    challengeMode: room.challengeMode ? {
+      ...room.challengeMode,
+      multiplier: challengeMultiplier(room),
+      playerName: getPlayer(room, room.challengeMode.playerId)?.name || 'Player',
+      targetName: getPlayer(room, room.challengeMode.targetId)?.name || 'opponent'
+    } : null,
     turnEndsAt: room.turnEndsAt,
     awaitingExpose: room.awaitingExpose ? { ...room.awaitingExpose, allowedIndices: canControlPlayer(room, viewer, room.awaitingExpose.playerId) ? room.awaitingExpose.allowedIndices : [] } : null,
     players: room.players.map(p => ({
@@ -1905,6 +2128,10 @@ function leftAlignTrayPattern(pattern) {
   return clean.padEnd(TRAY_SIZE, ' ').slice(0, TRAY_SIZE);
 }
 
+function emptyRevealedSlots() {
+  return Array.from({ length: TRAY_SIZE }, () => ({ ch: '', revealed: true }));
+}
+
 function validateTray(trayRaw, leftDotsRaw) {
   const rawInput = String(trayRaw || '').trim().toUpperCase();
 
@@ -1960,10 +2187,47 @@ function applySecret(room, player, tray, leftDots, sourceName = player.name) {
   return { ok: true };
 }
 
+function themeFromSuggestion(suggestion) {
+  if (!suggestion) return null;
+  if (suggestion.type === 'database') return THEME_MAP.get(suggestion.themeId) || null;
+  if (suggestion.type === 'custom') return makeCustomTheme(suggestion.name);
+  return null;
+}
+
+function hostSelectedTheme(room) {
+  const mode = normalizeThemeMode(room.settings.themeMode, room.settings.useThemes);
+  if (mode === 'database') return THEME_MAP.get(room.settings.themeId) || rand(THEMES);
+  if (mode === 'custom') return makeCustomTheme(room.settings.customThemeName || 'Custom Theme');
+  if (mode === 'random') return rand(THEMES);
+  return null;
+}
+
 function selectCurrentTheme(room) {
+  const mode = normalizeThemeMode(room.settings.themeMode, room.settings.useThemes);
+  room.settings.themeMode = mode;
+  room.settings.useThemes = mode !== 'none';
   if (!room.settings.useThemes) return null;
-  if (room.settings.themeMode === 'host' && THEME_MAP.has(room.settings.themeId)) return THEME_MAP.get(room.settings.themeId);
-  return rand(THEMES);
+  if (mode === 'random') return rand(THEMES);
+
+  const method = normalizeThemeSelectionMethod(room.settings.themeSelectionMethod);
+  room.settings.themeSelectionMethod = method;
+  if (method === 'host') return hostSelectedTheme(room);
+
+  const suggestions = Object.values(room.themeSuggestions || {})
+    .filter(s => s && s.type === mode)
+    .map(s => ({ ...s, id: s.id || suggestionIdForThemeSuggestion(s), theme: themeFromSuggestion(s) }))
+    .filter(s => s.theme);
+  if (!suggestions.length) return hostSelectedTheme(room);
+
+  if (method === 'random') return rand(suggestions).theme;
+
+  const counts = new Map(suggestions.map(s => [s.id, 0]));
+  for (const voteId of Object.values(room.themeVotes || {})) {
+    if (counts.has(voteId)) counts.set(voteId, counts.get(voteId) + 1);
+  }
+  const high = Math.max(...counts.values());
+  const tied = suggestions.filter(s => counts.get(s.id) === high);
+  return rand(tied.length ? tied : suggestions).theme;
 }
 
 function pickCpuWord(room) {
@@ -2096,6 +2360,9 @@ function askSymbolInternal(room, asker, target, symbol) {
   if (!target || target.id === asker.id) return { ok: false, message: 'Choose a valid opponent.' };
   if (!target.slots) return { ok: false, message: 'That opponent has no tray.' };
   if (allExposed(target)) return { ok: false, message: 'That opponent has no hidden spaces left.' };
+  if (room.challengeMode && (asker.id !== room.challengeMode.playerId || target.id !== room.challengeMode.targetId)) {
+    return { ok: false, message: 'Challenge mode can only target the remaining opponent word.' };
+  }
   if (room.dailyPuzzle && !asker.isCpu && !asker.isLocal) room.dailyGuessCount = (room.dailyGuessCount || 0) + 1;
 
   const normalized = normalizeSymbol(symbol);
@@ -2110,14 +2377,15 @@ function askSymbolInternal(room, asker, target, symbol) {
     addLog(room, `${asker.name} asked ${target.name} for ${normalized === '.' ? 'a dot' : normalized}. No match.`);
     rememberCpuMiss(asker, target.id, normalized);
     room.firstGuessAvailable = false;
-    if (normalized === '.') {
+    if (normalized === '.' && !room.challengeMode) {
       asker.score -= 50;
       addLog(room, `${asker.name} loses 50 points for asking for a dot from a player with no hidden dot.`);
       addEffect(room, 'dot-miss', `${asker.name} asked for a dot and missed. -50`, { actorId: asker.id, targetId: target.id, symbol: normalized });
     } else {
       addEffect(room, 'miss', `${asker.name} asked ${target.name} for ${normalized}. No match.`, { actorId: asker.id, targetId: target.id, symbol: normalized });
     }
-    advanceTurnAfterMiss(room);
+    if (room.challengeMode) afterChallengeGuess(room);
+    else advanceTurnAfterMiss(room);
     return { ok: true };
   }
 
@@ -2126,11 +2394,13 @@ function askSymbolInternal(room, asker, target, symbol) {
   // CPU targets can still resolve a single match automatically so CPU games do not feel stalled.
   if (matches.length === 1 && target.isCpu) {
     addEffect(room, 'correct-pending', `${asker.name} guessed correctly. ${target.name} has ${normalized === '.' ? 'a dot' : normalized}.`, { actorId: asker.id, targetId: target.id, symbol: normalized });
-    const mult = room.firstGuessAvailable ? room.multiplier : 1;
+    const mult = room.challengeMode ? challengeMultiplier(room) : (room.firstGuessAvailable ? room.multiplier : 1);
     revealSlot(room, target, matches[0], asker.id, 'guess', mult);
     room.firstGuessAvailable = false;
     if (room.status === 'playing') {
-      if (!skipActiveIfNoValidTarget(room)) {
+      if (room.challengeMode) {
+        afterChallengeGuess(room);
+      } else if (!skipActiveIfNoValidTarget(room)) {
         addLog(room, `${asker.name} guessed correctly and continues.`);
         setTurnTimer(room);
       }
@@ -2151,7 +2421,8 @@ function askSymbolInternal(room, asker, target, symbol) {
     message: `${target.name}, click one hidden ${normalized === '.' ? 'dot' : normalized} card to flip.`
   };
   addLog(room, `${asker.name} asked ${target.name} for ${normalized === '.' ? 'a dot' : normalized}. ${target.name} must click one matching hidden card.`);
-  setTurnTimer(room);
+  if (room.challengeMode) room.turnEndsAt = null;
+  else setTurnTimer(room);
   return { ok: true };
 }
 
@@ -2162,7 +2433,7 @@ function chooseExposeInternal(room, target, idx) {
   if (!target || pending.playerId !== target.id) return { ok: false, message: 'This exposure choice is not yours.' };
   if (!pending.allowedIndices.includes(idx)) return { ok: false, message: 'That slot is not allowed for this exposure.' };
 
-  const mult = pending.type === 'guess' && room.firstGuessAvailable ? room.multiplier : 1;
+  const mult = room.challengeMode && pending.type === 'guess' ? challengeMultiplier(room) : (pending.type === 'guess' && room.firstGuessAvailable ? room.multiplier : 1);
   revealSlot(room, target, idx, pending.scoringPlayerId, pending.type === 'guess' ? 'guess' : 'card', mult);
 
   let continuingAskerName = '';
@@ -2172,7 +2443,9 @@ function chooseExposeInternal(room, target, idx) {
   }
 
   room.awaitingExpose = null;
-  if (room.status === 'playing' && !skipActiveIfNoValidTarget(room)) {
+  if (room.status === 'playing' && room.challengeMode && pending.type === 'guess') {
+    afterChallengeGuess(room);
+  } else if (room.status === 'playing' && !skipActiveIfNoValidTarget(room)) {
     if (continuingAskerName) addLog(room, `${continuingAskerName} guessed correctly and continues.`);
     setTurnTimer(room);
   }
@@ -2395,6 +2668,7 @@ function autoResolveCpuExpose(room) {
 
 function maybeScheduleAi(room) {
   if (room.status !== 'playing') return;
+  if (!room.settings?.aiEnabled) return;
   if (gameIntroActive(room)) return;
   if (room.aiTimer) return;
 
@@ -2448,6 +2722,9 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
   const active = activePlayer(room);
   if (!isInterrupt && active?.id !== guesser.id) return { ok: false, message: 'Full guesses on your turn only, unless using interruptive guess.' };
   if (isInterrupt && hiddenCount(target) < 5) return { ok: false, message: 'Interruptive guesses are only allowed when that opponent has 5 or more hidden spaces.' };
+  if (room.challengeMode && (guesser.id !== room.challengeMode.playerId || target.id !== room.challengeMode.targetId || isInterrupt)) {
+    return { ok: false, message: 'Challenge mode can only target the remaining opponent word.' };
+  }
   const raw = String(guess || '').trim().toUpperCase();
   if (!raw) return { ok: false, message: 'Enter a full word or full tray pattern.' };
   if (room.dailyPuzzle && !guesser.isCpu && !guesser.isLocal) room.dailyGuessCount = (room.dailyGuessCount || 0) + 1;
@@ -2457,6 +2734,18 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
   const correct = normalizedFull === fullPattern || normalizedFull === wordOnly;
 
   if (correct) {
+    if (room.challengeMode) {
+      const hiddenAward = hiddenGuessSlotValue(target, normalizedFull === fullPattern);
+      const totalAward = Math.round(hiddenAward.points * challengeMultiplier(room));
+      target.slots.forEach(s => { s.revealed = true; });
+      guesser.score += totalAward;
+      addLog(room, `${guesser.name} completed the 1v1 challenge and solved ${target.name}'s word. +${totalAward} scaled hidden points.`);
+      addEffect(room, 'correct-full', `${guesser.name} solved the challenge word. +${totalAward}`, { actorId: guesser.id, targetId: target.id, points: totalAward, hiddenPoints: hiddenAward.points, solvedWord: solvedWordText(target) });
+      addWordSolvedEffect(room, target, guesser.id);
+      room.challengeMode = null;
+      checkGameEnd(room);
+      return { ok: true };
+    }
     const baseAward = isInterrupt ? 100 : 50;
     const hiddenAward = hiddenGuessSlotValue(target, normalizedFull === fullPattern);
     const totalAward = baseAward + hiddenAward.points;
@@ -2466,6 +2755,7 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
     addLog(room, `${guesser.name} correctly guessed ${target.name}'s ${normalizedFull === fullPattern ? 'full tray' : 'word'} and revealed it. +${totalAward} points (${baseAward} solve bonus${hiddenText}).`);
     addEffect(room, 'correct-full', `${guesser.name} solved ${target.name}'s tray. +${totalAward}`, { actorId: guesser.id, targetId: target.id, points: totalAward, hiddenPoints: hiddenAward.points, solvedWord: solvedWordText(target) });
     addWordSolvedEffect(room, target, guesser.id);
+    maybeCreateChallengeOffer(room, target, guesser.id);
     checkGameEnd(room);
     if (!isInterrupt && room.status === 'playing') {
       if (!skipActiveIfNoValidTarget(room)) {
@@ -2474,6 +2764,12 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
       }
     }
   } else {
+    if (room.challengeMode) {
+      addLog(room, `${guesser.name} made a wrong challenge guess. Multiplier drops.`);
+      addEffect(room, 'bad-guess', `${guesser.name} made a wrong challenge guess.`, { actorId: guesser.id, targetId: target.id });
+      afterChallengeGuess(room);
+      return { ok: true };
+    }
     guesser.score -= isInterrupt ? 50 : 100;
     addLog(room, `${guesser.name} guessed ${target.name}'s word/tray incorrectly. -${isInterrupt ? 50 : 100} points.`);
     addEffect(room, 'bad-guess', `${guesser.name} made a wrong full guess. -${isInterrupt ? 50 : 100}`, { actorId: guesser.id, targetId: target.id });
@@ -2536,12 +2832,16 @@ io.on('connection', (socket) => {
     room.dailyScore = null;
     room.dailyElapsedMs = null;
     room.dailyLeaderboardSubmitted = false;
-    room.settings.aiEnabled = true;
+    room.settings.aiEnabled = false;
     room.settings.cpuDifficulty = puzzle.difficulty || 'genius';
-    room.settings.useThemes = true;
-    room.settings.themeMode = 'host';
-    room.settings.themeId = puzzle.theme?.id || 'random_hard';
-    room.currentTheme = THEME_MAP.get(room.settings.themeId) || null;
+    room.settings.useThemes = false;
+    room.settings.themeMode = 'none';
+    room.settings.themeSelectionMethod = 'host';
+    room.currentTheme = null;
+    room.players[0].ready = true;
+    room.players[0].word = '';
+    room.players[0].trayPattern = '';
+    room.players[0].slots = emptyRevealedSlots();
     const cpuResult = addCpuPlayer(room, puzzle.difficulty || 'genius');
     if (cpuResult.ok) {
       cpuResult.cpu.name = puzzle.cpuName || 'Wolt';
@@ -2549,8 +2849,16 @@ io.on('connection', (socket) => {
       cpuResult.cpu.avatar = cpuAvatarForName(cpuResult.cpu.name);
       if (!cpuResult.cpu.ready) autoAssignCpuSecret(room, cpuResult.cpu);
     }
-    room.status = 'setup';
+    room.settings.aiEnabled = false;
+    room.status = 'playing';
+    room.turnIndex = 0;
+    room.rulesIntroPending = false;
+    room.rulesIntroAcknowledged = true;
+    room.startingIntro = false;
+    room.dailyStartedAt = Date.now();
     addLog(room, `Daily Puzzle ${puzzle.key}: ${puzzle.clue}.`);
+    addLog(room, 'Daily Puzzle mode: solve Wolt\'s word. Your tray is not in play.');
+    startTurn(room, true);
     socket.join(room.code);
     socket.emit('joined', { code: room.code, playerId: room.players[0].id, token: safeToken, dailyPuzzle: true });
     broadcast(room);
@@ -2664,6 +2972,45 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('submitThemeSuggestion', ({ themeId, customThemeName } = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    if (room.randomOnline) return emitError(socket, 'Random Online chooses themes automatically.');
+    if (room.status !== 'lobby') return emitError(socket, 'Theme suggestions are only open in the lobby.');
+    const self = socketPlayer(room, socket);
+    if (!self || self.isCpu) return emitError(socket, 'Only players can suggest themes.');
+    const mode = normalizeThemeMode(room.settings.themeMode, room.settings.useThemes);
+    if (!['database', 'custom'].includes(mode)) return emitError(socket, 'This theme mode does not use player suggestions.');
+    let suggestion = null;
+    if (mode === 'database') {
+      if (!THEME_MAP.has(themeId)) return emitError(socket, 'Choose a theme from the database.');
+      suggestion = { playerId: self.id, type: 'database', themeId };
+    } else {
+      const clean = cleanThemeName(customThemeName);
+      if (!clean) return emitError(socket, 'Type a custom theme.');
+      suggestion = { playerId: self.id, type: 'custom', name: clean };
+    }
+    suggestion.id = suggestionIdForThemeSuggestion(suggestion);
+    room.themeSuggestions[self.id] = suggestion;
+    room.themeVotes = {};
+    addLog(room, `${self.name} submitted a theme suggestion.`);
+    broadcast(room);
+  });
+
+  socket.on('voteThemeSuggestion', ({ suggestionId } = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room) return emitError(socket, 'You are not in a room.');
+    if (room.randomOnline) return emitError(socket, 'Random Online chooses themes automatically.');
+    if (room.status !== 'lobby') return emitError(socket, 'Theme voting is only open in the lobby.');
+    const self = socketPlayer(room, socket);
+    if (!self || self.isCpu) return emitError(socket, 'Only players can vote on themes.');
+    if (normalizeThemeSelectionMethod(room.settings.themeSelectionMethod) !== 'vote') return emitError(socket, 'Theme voting is not enabled.');
+    const valid = roomThemeSuggestions(room).some(s => s.id === suggestionId);
+    if (!valid) return emitError(socket, 'Choose a submitted theme.');
+    room.themeVotes[self.id] = String(suggestionId);
+    broadcast(room);
+  });
+
   socket.on('setSettings', (incoming = {}) => {
     const room = getRoomOfSocket(socket.id);
     if (!room) return emitError(socket, 'You are not in a room.');
@@ -2676,9 +3023,20 @@ io.on('connection', (socket) => {
       if (!VALID_TIMERS.has(value)) return emitError(socket, 'Invalid timer value.');
       room.settings.turnTimerSec = value;
     }
-    if ('useThemes' in incoming) room.settings.useThemes = !!incoming.useThemes;
-    if ('themeMode' in incoming && ['random', 'host'].includes(incoming.themeMode)) room.settings.themeMode = incoming.themeMode;
-    if ('themeId' in incoming && THEME_MAP.has(incoming.themeId)) room.settings.themeId = incoming.themeId;
+    if (!room.randomOnline) {
+      if ('themeMode' in incoming || 'useThemes' in incoming) {
+        const nextMode = normalizeThemeMode(incoming.themeMode, incoming.useThemes !== undefined ? !!incoming.useThemes : room.settings.useThemes);
+        room.settings.themeMode = nextMode;
+        room.settings.useThemes = nextMode !== 'none';
+        room.themeVotes = {};
+      }
+      if ('themeSelectionMethod' in incoming) {
+        room.settings.themeSelectionMethod = normalizeThemeSelectionMethod(incoming.themeSelectionMethod);
+        room.themeVotes = {};
+      }
+      if ('themeId' in incoming && THEME_MAP.has(incoming.themeId)) room.settings.themeId = incoming.themeId;
+      if ('customThemeName' in incoming) room.settings.customThemeName = cleanThemeName(incoming.customThemeName);
+    }
     if ('sharedDevice' in incoming) room.settings.sharedDevice = !!incoming.sharedDevice;
     if ('manualReveal' in incoming) room.settings.manualReveal = !!incoming.manualReveal;
     if ('aiEnabled' in incoming) room.settings.aiEnabled = !!incoming.aiEnabled;
@@ -2703,6 +3061,7 @@ io.on('connection', (socket) => {
       room.randomWaitingSince = null;
       room.randomCpuFallbackUsed = true;
       enforceRandomCompetitiveSettings(room);
+      assignRandomOnlineTheme(room);
     }
     broadcast(room);
   });
@@ -2720,6 +3079,7 @@ io.on('connection', (socket) => {
     room.randomWaitingSince = null;
     room.randomCpuFallbackUsed = true;
     enforceRandomCompetitiveSettings(room);
+    assignRandomOnlineTheme(room);
     addLog(room, 'Random Online fallback selected: playing against an Experimental CPU.');
     broadcast(room);
   });
@@ -2760,9 +3120,15 @@ io.on('connection', (socket) => {
     if (room.hostId !== self?.id) return emitError(socket, 'Only the host can start setup.');
     if (room.players.length < MIN_PLAYERS) return emitError(socket, 'You need at least 2 players or one AI/local seat.');
     room.status = 'setup';
-    room.currentTheme = selectCurrentTheme(room);
+    if (room.randomOnline) {
+      if (!room.randomMatchedAt && !room.randomCpuFallbackUsed) assignRandomOnlineTheme(room);
+    } else {
+      room.currentTheme = selectCurrentTheme(room);
+    }
     room.rulesIntroPending = false;
     room.rulesIntroAcknowledged = false;
+    room.challengeOffer = null;
+    room.challengeMode = null;
     room.players.forEach(p => {
       p.ready = false;
       p.slots = null;
@@ -2775,7 +3141,13 @@ io.on('connection', (socket) => {
     });
     room.players.filter(p => p.isCpu).forEach(cpu => autoAssignCpuSecret(room, cpu));
     addLog(room, 'Secret word setup started.');
-    if (room.currentTheme) addLog(room, `Round theme selected: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
+    if (room.currentTheme) {
+      addLog(room, `Round theme selected: ${room.currentTheme.emoji} ${room.currentTheme.name}.`);
+      addEffect(room, 'theme-reveal', `Theme revealed: ${room.currentTheme.name}`, { theme: publicTheme(room) });
+    } else if (room.randomOnline) {
+      addLog(room, 'Random Online theme result: No Theme.');
+      addEffect(room, 'theme-reveal', 'Theme revealed: No Theme', { theme: null, noTheme: true });
+    }
     startIfReady(room);
     broadcast(room);
   });
@@ -2812,6 +3184,33 @@ io.on('connection', (socket) => {
     const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Waiting for the host to continue.');
     beginStarterIntro(room);
+    broadcast(room);
+  });
+
+  socket.on('challengeDecision', ({ continueChallenge } = {}) => {
+    const room = getRoomOfSocket(socket.id);
+    if (!room || room.status !== 'playing' || !room.challengeOffer) return emitError(socket, 'No challenge decision is pending.');
+    const self = socketPlayer(room, socket);
+    const offer = room.challengeOffer;
+    if (!self || !canControlPlayer(room, self, offer.playerId)) return emitError(socket, 'Only the challenged player can choose.');
+    const chooser = getPlayer(room, offer.playerId) || self;
+    if (!continueChallenge) {
+      const winner = getPlayer(room, offer.targetId);
+      finishRoom(room, `${chooser.name} accepted defeat. Winner: ${winner?.name || 'Opponent'}.`);
+      broadcast(room);
+      return;
+    }
+    room.challengeMode = { playerId: chooser.id, targetId: offer.targetId, multiplier: 1, guesses: 0, startedAt: Date.now() };
+    room.challengeOffer = null;
+    room.awaitingExpose = null;
+    room.currentCard = null;
+    room.additionalTurnOnMiss = false;
+    room.additionalTurnOwnerId = null;
+    const idx = room.players.findIndex(p => p.id === chooser.id);
+    if (idx >= 0) room.turnIndex = idx;
+    addLog(room, `${chooser.name} continues the 1v1 challenge. Every guess has 10 seconds.`);
+    addEffect(room, 'challenge-start', `${chooser.name} continues the challenge. 10 seconds per guess.`, { actorId: chooser.id, targetId: offer.targetId });
+    setChallengeTimer(room);
     broadcast(room);
   });
 
@@ -3003,10 +3402,17 @@ io.on('connection', (socket) => {
       clearRandomForfeitTimer(room, p.id);
     }
     if (room.dailyPuzzle) {
-      room.status = 'setup';
-      room.currentTheme = room.dailyPuzzleInfo?.theme?.id ? THEME_MAP.get(room.dailyPuzzleInfo.theme.id) : room.currentTheme;
+      room.status = 'playing';
+      room.currentTheme = null;
+      room.settings.aiEnabled = false;
+      room.players.filter(p => !p.isCpu).forEach(p => {
+        p.ready = true;
+        p.slots = emptyRevealedSlots();
+      });
       room.players.filter(p => p.isCpu).forEach(cpu => autoAssignCpuSecret(room, cpu));
       room.log = [`Daily Puzzle ${room.dailyPuzzleKey} restarted.`];
+      room.dailyStartedAt = Date.now();
+      startTurn(room, true);
     } else {
       room.log = ['Room reset.'];
     }
@@ -3084,6 +3490,13 @@ setInterval(() => {
   if (room.startIntroTimer) clearTimeout(room.startIntroTimer);
       if (room.disconnectTimers) for (const t of room.disconnectTimers.values()) clearTimeout(t);
       deleteRoom(room);
+      continue;
+    }
+
+    if (room.status === 'playing' && room.challengeMode && room.turnEndsAt && now >= room.turnEndsAt) {
+      const challenger = getPlayer(room, room.challengeMode.playerId);
+      finishRoom(room, `${challenger?.name || 'The challenger'} ran out of time in Challenge Mode.`);
+      broadcast(room);
       continue;
     }
 
