@@ -1,0 +1,2289 @@
+:root{
+  --bg:#1d130c;
+  --bg2:#342014;
+  --panel:rgba(57,34,20,.92);
+  --panel2:rgba(82,50,29,.94);
+  --panel3:rgba(35,24,16,.92);
+  --ink:#fff6dc;
+  --muted:#dbc698;
+  --line:rgba(255,216,132,.26);
+  --gold:#f2c35b;
+  --gold2:#ffe6a4;
+  --green:#66df9d;
+  --blue:#7cc4ff;
+  --red:#ff7777;
+  --purple:#cda7ff;
+  --shadow:0 18px 48px rgba(0,0,0,.42);
+  --radius:22px;
+  --rack-w:clamp(392px,41vw,492px);
+  --slot-gap:4px;
+  --slot-h:clamp(42px,4vw,56px);
+}
+body[data-skin="arcade"]{--bg:#19163d;--bg2:#34217c;--panel:rgba(34,28,92,.94);--panel2:rgba(66,45,151,.94);--gold:#ffd452;--blue:#73e3ff;--green:#72ff9d;--red:#ff6f97;}
+body[data-skin="neon"]{--bg:#070711;--bg2:#14143a;--panel:rgba(12,14,34,.95);--panel2:rgba(20,26,54,.96);--gold:#87f7ff;--gold2:#f1fbff;--blue:#64d6ff;--green:#6dffb7;--purple:#f08cff;}
+body[data-skin="forest"]{--bg:#0f1b13;--bg2:#20351f;--panel:rgba(22,43,28,.94);--panel2:rgba(42,70,38,.94);--gold:#e6c878;--green:#9ce884;}
+body[data-skin="candy"]{--bg:#392139;--bg2:#703766;--panel:rgba(92,48,86,.94);--panel2:rgba(132,68,120,.94);--gold:#ffe074;--blue:#a9e9ff;--green:#c7ff9d;--purple:#ffb5e8;}
+body[data-skin="slate"]{--bg:#101419;--bg2:#202833;--panel:rgba(30,38,48,.95);--panel2:rgba(42,52,64,.95);--gold:#d6dce4;--gold2:#fff;--muted:#c8d0d8;--blue:#8fc8ff;}
+
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;}
+body{
+  min-height:100vh;
+  font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(242,195,91,.18), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(124,196,255,.12), transparent 34%),
+    linear-gradient(145deg,var(--bg),var(--bg2) 58%,#150e09);
+  overflow-x:hidden;
+}
+.ambientGlow{position:fixed;inset:-20%;pointer-events:none;background:radial-gradient(circle at 50% -10%,rgba(255,210,117,.16),transparent 38%);z-index:-1}
+.hidden{display:none!important}
+button,input,select{font:inherit}
+button{cursor:pointer;border:0;color:var(--ink)}
+input,select{
+  width:100%;border:1px solid var(--line);border-radius:14px;padding:11px 12px;
+  color:var(--ink);background:rgba(0,0,0,.25);outline:none;
+}
+input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(242,195,91,.2)}
+label{display:block;margin:10px 0 6px;color:var(--gold2);font-size:.84rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+h1,h2,p{margin-top:0} h1{font-size:clamp(2.1rem,5vw,4.6rem);line-height:.9;margin-bottom:.65rem} h2{font-size:1.1rem;color:var(--gold2)}
+p,.hint{color:var(--muted);line-height:1.45}.tinyCaps{font-size:.72rem;text-transform:uppercase;letter-spacing:.16em;color:var(--gold);font-weight:900}.centerText{text-align:center}.goodText{color:var(--green)!important}.dangerText{color:var(--red)!important}
+
+.vaultTopbar{height:72px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:10px 18px;gap:14px;position:sticky;top:0;z-index:50;background:rgba(15,10,6,.62);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.topLeftCluster,.topRightCluster{display:flex;align-items:center;gap:10px}.topRightCluster{justify-content:flex-end}.iconBtn,.circleBtn{width:42px;height:42px;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04));border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.15)}
+.circleBtn.muted{opacity:.45}.roomPlate{display:flex;align-items:center;gap:8px;border-radius:16px;padding:8px 12px;background:rgba(0,0,0,.24);border:1px solid var(--line)}.roomPlate span{font-size:.65rem;color:var(--muted);text-transform:uppercase}.roomPlate strong{font-size:1.2rem;color:var(--gold)}
+.brandPlate{display:flex;align-items:center;justify-content:center}.brandLogo{height:52px;max-width:260px;object-fit:contain;filter:drop-shadow(0 5px 14px rgba(0,0,0,.35))}
+main{padding:18px;min-height:calc(100vh - 72px)}
+
+.homePanel,.screen{max-width:1180px;margin:0 auto}.homePanel{display:grid;grid-template-columns:minmax(320px,480px) 1fr;gap:24px;align-items:stretch;padding-top:30px}.heroCard,.featureBoard,.woodPanel,.setupCard,.endCard,.leftCommand,.rightRail,.centerBoard,.railPanel,.turnPanel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.heroCard,.featureBoard,.woodPanel,.setupCard,.endCard{padding:24px}.featureGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.featureGrid div{padding:16px;border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.18)}.featureGrid strong{display:block;color:var(--gold2)}.featureGrid span{display:block;color:var(--muted);font-size:.92rem;margin-top:4px}
+.accountPanel,.dailyPuzzleCard{margin-top:14px;border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.18);padding:14px}.accountMiniGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.accountMiniGrid button{white-space:nowrap}.accountHint{font-size:.82rem;margin:8px 0 0}.accountSignedIn{display:grid;gap:5px}.accountProfileRow{display:flex;align-items:center;gap:10px;min-width:0}.accountProfileRow strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.accountProfileRow .avatarUpload{margin-left:auto;padding:7px 10px}.accountSignedIn span{color:var(--muted);font-size:.9rem}.dailyPuzzleBoard{display:flex;flex-direction:column}.dailyPuzzleCard{margin-top:0;margin-bottom:0;background:linear-gradient(180deg,rgba(255,215,112,.13),rgba(0,0,0,.2))}.dailyPuzzleMain{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding:20px}.dailyPuzzleMain .primaryGameBtn{align-self:flex-start}.dailyRulesMini{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.dailyRulesMini span{border:1px solid var(--line);border-radius:999px;padding:5px 8px;color:var(--muted);font-size:.78rem}.dailyLeaderboard{display:grid;gap:7px;margin-top:12px}.dailyLeaderRow{display:grid;gap:2px;border:1px solid var(--line);border-radius:12px;padding:8px;background:rgba(0,0,0,.16)}.dailyLeaderRow strong{color:var(--gold2);font-size:.86rem}.dailyLeaderRow span{color:var(--muted);font-size:.78rem}.emptyDailyBoard{color:var(--muted);font-size:.86rem}.dailyStatGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.dailyStatGrid div{border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.18);padding:8px;text-align:center}.dailyStatGrid span{display:block;color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.08em}.dailyStatGrid strong{display:block;color:var(--gold2);font-size:1.05rem}
+.buttonRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.primaryGameBtn,.secondaryGameBtn,.blueBtn,.purpleBtn,.dangerBtn,.ghostBtn,.smallBtn{border-radius:14px;padding:11px 14px;font-weight:900;letter-spacing:.02em}.primaryGameBtn{background:linear-gradient(180deg,#ffd977,#b87820);color:#251407}.secondaryGameBtn{background:linear-gradient(180deg,#5c8ed8,#274f91)}.blueBtn{background:linear-gradient(180deg,#61c8ff,#236ab2)}.purpleBtn{background:linear-gradient(180deg,#c090ff,#6948b9)}.dangerBtn{background:linear-gradient(180deg,#ff8b7e,#a7332d)}.ghostBtn,.smallBtn{background:rgba(255,255,255,.08);border:1px solid var(--line)}.hugeBtn{font-size:1.2rem;padding:15px 22px}.divider{display:flex;align-items:center;gap:10px;color:var(--muted);margin:16px 0}.divider:before,.divider:after{content:"";height:1px;background:var(--line);flex:1}.smallDivider{margin:12px 0}.notice,.tipBox,.pendingBanner,.manualBanner,.themeBanner{border:1px solid var(--line);background:rgba(0,0,0,.24);border-radius:14px;padding:12px;color:var(--muted)}.pendingBanner{border-color:rgba(255,215,100,.65);color:var(--gold2)}.manualBanner{font-size:.88rem}.themeBanner{margin-bottom:14px}.themeBanner strong{display:block;color:var(--gold2)}.themeBanner span{color:var(--muted)}
+
+.lobbyShell,.setupShell,.endCard{max-width:1200px;margin:0 auto}.lobbyHeader{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:18px}.bigRoomCode{font-size:3rem;font-weight:1000;color:var(--gold);letter-spacing:.12em}.grid{display:grid;gap:18px}.twoUp{grid-template-columns:1fr 1fr}.playerList{list-style:none;padding:0;margin:0;display:grid;gap:10px}.playerList li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.16)}.playerActions{display:flex;gap:8px}.hostTag,.cpuTag,.localTag,.scoreInfo em,.rackNameText span{font-size:.65rem;border:1px solid var(--line);border-radius:999px;padding:2px 6px;color:var(--gold2);font-style:normal}.cpuTag,.rackNameText span:nth-child(3){color:#b8f4ff}.localAddRow,.themeSettingGrid,.spotifyPlaylistRow,.audioButtonRow{display:flex;gap:8px;align-items:center}.settingToggle{margin:12px 0}.visualThemeMini{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.lobbyStart{text-align:center;margin-top:20px}.avatarUpload input{display:none}
+
+.setupShell{display:grid;grid-template-columns:minmax(360px,1fr) 310px;gap:18px}.setupShellWide{grid-template-columns:1fr}.sharedSetupGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.sharedPlayerSecret{border:1px solid var(--line);border-radius:18px;padding:16px;background:rgba(0,0,0,.18)}.trayBuilderTools{display:flex;gap:8px;margin:8px 0}.trayWarning{margin-top:8px;color:var(--red);font-weight:800}.previewRack{position:relative!important;transform:none!important;width:100%!important;margin-top:10px}.secretForm{display:grid;gap:6px}.endCard{max-width:820px}.activityLog{margin:0;padding-left:22px;color:var(--muted);display:grid;gap:8px}.logLetter{color:var(--gold2);font-weight:900}
+
+.gameScreen{padding:0;max-width:none}.gameHud{display:grid;grid-template-columns:minmax(690px,1fr) 350px;grid-template-rows:auto 1fr;gap:14px;height:calc(100vh - 108px);min-height:700px}.centerBoard{grid-column:1;grid-row:1 / span 2;position:relative;overflow:hidden;padding:14px;display:flex;flex-direction:column;min-width:0}.leftCommand{grid-column:2;grid-row:1;padding:16px;align-self:start;max-height:calc(100vh - 122px);overflow:auto}.rightRail{grid-column:2;grid-row:2;display:flex;flex-direction:column;gap:12px;min-height:0;background:transparent;border:0;box-shadow:none}.railPanel,.turnPanel{padding:14px;min-height:0;overflow:auto}.railPanel:nth-child(2){flex:1}.turnPanel{display:flex;align-items:center;justify-content:space-between;gap:12px}.turnPanel.yourTurn{outline:2px solid rgba(102,223,157,.5)}
+.matchStrip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.matchPill,.timerPill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;background:rgba(0,0,0,.26);padding:7px 10px;color:var(--muted);font-size:.88rem}.timerPill.hot{color:var(--gold2)}.timerPill.danger{color:var(--red);border-color:rgba(255,100,100,.7)}.greenDot{width:8px;height:8px;border-radius:999px;background:var(--green);box-shadow:0 0 14px var(--green)}.commandTitle{font-size:1.35rem;font-weight:1000;color:var(--gold2);margin-bottom:10px}.guessInputRow{display:grid;grid-template-columns:1fr 46px;gap:8px}.dotButton{border-radius:14px;background:rgba(255,255,255,.1);border:1px solid var(--line);font-size:1.4rem}.letterKeyboard{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:8px 0}.keyBtn{border-radius:10px;padding:8px 0;background:rgba(255,255,255,.08);border:1px solid var(--line);font-weight:900}.wideKey{grid-column:span 2}.keyboardFilled{animation:inputPop .38s ease}.manualControls{display:grid;grid-template-columns:1fr 1fr;gap:8px}.aiOrb{font-size:3rem;text-align:center;animation:pulse 1.3s ease-in-out infinite}
+
+.boardAndCard{position:relative;flex:1;min-height:540px;display:block}.trayTheater{position:relative;width:100%;height:100%;min-height:540px;border-radius:28px;overflow:hidden;background:
+  radial-gradient(ellipse at center,rgba(255,210,126,.16) 0 28%,transparent 29%),
+  radial-gradient(ellipse at center,rgba(0,0,0,.18) 0 55%,rgba(0,0,0,.04) 56%,transparent 68%),
+  linear-gradient(135deg,rgba(100,55,25,.55),rgba(37,22,12,.28));border:1px solid rgba(255,220,140,.17)}
+.trayTheater:before{content:"";position:absolute;left:50%;top:50%;width:min(64%,620px);aspect-ratio:1.85;border:2px solid rgba(255,221,133,.18);border-radius:50%;transform:translate(-50%,-50%);box-shadow:inset 0 0 60px rgba(0,0,0,.18);pointer-events:none}.hintRibbon{display:flex;align-items:center;gap:10px;margin-top:8px;border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.2);padding:10px 12px;color:var(--muted)}.hintRibbon em{font-style:normal}.cardDock{display:none}
+
+.playerRack{--rw:var(--rack-w);position:absolute;left:var(--rack-left,50%);top:var(--rack-top,50%);width:var(--rw);max-width:calc(100% - 34px);transform:translate(-50%,-50%);border:1px solid rgba(255,220,140,.32);border-radius:18px;background:linear-gradient(180deg,rgba(91,54,29,.96),rgba(43,27,17,.96));box-shadow:0 12px 24px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.12);padding:9px 10px 10px;z-index:5;transition:box-shadow .18s ease, outline-color .18s ease, transform .18s ease}.playerRack.activeRack{outline:2px solid rgba(124,196,255,.55);box-shadow:0 0 0 5px rgba(124,196,255,.12),0 14px 28px rgba(0,0,0,.4)}.playerRack.cpuRack{background:linear-gradient(180deg,rgba(74,59,90,.95),rgba(34,27,45,.96))}.playerRack.targetSelectableRack{cursor:pointer}.playerRack.targetSelectableRack:hover{box-shadow:0 0 0 4px rgba(242,195,91,.16),0 14px 28px rgba(0,0,0,.42)}.playerRack.selectedTargetRack{outline:3px solid rgba(255,219,104,.95);box-shadow:0 0 0 7px rgba(255,219,104,.18),0 0 28px rgba(255,219,104,.32),0 14px 34px rgba(0,0,0,.45)}
+.rackNameplate{height:28px;display:flex;align-items:center;justify-content:center;gap:7px;margin:0 0 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--gold2);font-weight:1000}.rackNameText{display:inline-flex;align-items:center;gap:5px;min-width:0;overflow:hidden;text-overflow:ellipsis}.wordRack{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--slot-gap);align-items:end;width:100%;padding:6px 7px 8px;border-radius:14px;background:rgba(0,0,0,.22);border:1px solid rgba(255,220,140,.16)}.slotShell{min-width:0;text-align:center}.slotValue{height:14px;font-size:10px;line-height:1;color:var(--gold);font-weight:900;text-shadow:0 1px 1px #000;margin-bottom:3px}.slotTile{width:100%;height:var(--slot-h);border-radius:9px;border:1px solid rgba(255,235,170,.45);background:linear-gradient(180deg,#f5d385,#ac6e24);color:#251407;font-weight:1000;display:grid;place-items:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 5px 10px rgba(0,0,0,.28);padding:0}.coveredTile{background:linear-gradient(145deg,#68401f,#2d1b11);color:#f4ca66}.revealedTile{background:linear-gradient(180deg,#fff1bd,#d69b3b);color:#201105}.dotTile{background:linear-gradient(180deg,#f4f4ee,#beb8a2)}.clickableTile,.manualClickableTile{outline:2px solid var(--green);animation:clickableGlow 1s ease-in-out infinite}.manualClickableTile{outline-color:var(--gold)}.tileSymbol{position:absolute;opacity:.18;font-size:1rem}.tileGlyph{position:relative;z-index:1;font-size:clamp(1rem,2.2vw,1.55rem);line-height:1}.tileGlyphInner{display:inline-block;transform:scale(var(--wv-glyph-scale,1));transform-origin:center}.emptySlot{height:var(--slot-h);border-radius:9px;border:1px dashed rgba(255,220,140,.16);background:transparent}.emptySlotValue{opacity:0}.emptySlotShell{opacity:.45}.rackFooter{height:16px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}.gemRow{display:flex;gap:3px;flex-wrap:wrap}.gemRow span{display:inline-block;width:8px;height:8px;border-radius:999px;background:rgba(255,255,255,.25)}.gemRow .lit{background:var(--gold)}.showOwnLabel{margin:0;font-size:.68rem;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:700}
+
+.boardDeckSource{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;grid-template-columns:72px 96px 72px;gap:12px;align-items:center;justify-items:center;z-index:4}.miniDeck,.centerTurnCardMini{border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.32);box-shadow:0 10px 22px rgba(0,0,0,.32);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.miniDeck{width:72px;height:92px}.miniDeck span{font-size:1.25rem;color:var(--gold);font-weight:1000}.miniDeck strong{font-size:.72rem;color:var(--muted);text-transform:uppercase}.blueDeck{background:linear-gradient(180deg,#244d80,#152b47)}.grayDeck{background:linear-gradient(180deg,#454b51,#22272b)}.centerTurnCardMini{width:96px;height:126px;padding:8px;background:linear-gradient(180deg,#6a4225,#2e1c12);color:var(--gold2)}.centerTurnCardMini strong{font-size:.82rem;line-height:1.05}.miniCardTiny{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);margin-bottom:5px}.cardBackMini{background:linear-gradient(145deg,#5c351b,#1f130d)}.currentCardReady{animation:cardReady .45s ease both}.emptyMiniTurnCard{opacity:.38}
+
+.scoreCards{display:grid;gap:8px}.scoreCard{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:16px;padding:10px;background:rgba(0,0,0,.22)}.scoreCard.activeScore{border-color:rgba(124,196,255,.65);box-shadow:0 0 0 3px rgba(124,196,255,.13)}.avatarWrap{position:relative}.avatar{width:34px;height:34px;border-radius:999px;display:inline-grid;place-items:center;background:hsl(var(--h,30) 65% 38%);border:1px solid rgba(255,255,255,.25);font-size:.78rem;font-weight:1000;color:#fff;overflow:hidden}.avatarPhoto img{width:100%;height:100%;object-fit:cover}.crown{position:absolute;top:-12px;left:8px;color:var(--gold)}.scoreInfo strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.scoreValue{font-size:1.35rem;font-weight:1000;color:var(--gold)}
+
+#effectLayer{position:absolute;inset:0;z-index:40;pointer-events:none;display:grid;place-items:center;overflow:hidden}.effectBurst{position:relative;min-width:min(86%,360px);max-width:min(86%,480px);border-radius:24px;border:1px solid rgba(255,255,255,.24);background:linear-gradient(180deg,rgba(55,34,22,.96),rgba(22,15,10,.97));box-shadow:0 24px 70px rgba(0,0,0,.52);padding:24px;text-align:center;animation:effectIn .22s ease-out both}.effectBurst strong{display:block;font-size:1.25rem;color:var(--gold2)}.effectIcon{width:66px;height:66px;border-radius:999px;margin:0 auto 12px;display:grid;place-items:center;font-size:2.2rem;background:rgba(255,255,255,.1);border:1px solid var(--line)}.effectRing{position:absolute;inset:-12px;border:2px solid rgba(255,221,100,.28);border-radius:30px;animation:pulse 1.2s ease-in-out infinite}.effect_good .effectIcon{color:var(--green)}.effect_bad .effectIcon{color:var(--red)}.effect_special .effectIcon{color:var(--purple)}.effectLeaving{animation:effectOut .48s ease-in both}
+.wv417TurnCardOverlay,.wv417CpuActionOverlay{position:relative;transform:translate(var(--from-x,0),var(--from-y,0)) scale(.26);opacity:0;transition:transform .46s cubic-bezier(.2,.8,.2,1),opacity .22s ease;filter:drop-shadow(0 28px 42px rgba(0,0,0,.46))}.wv417TurnCardOverlay.wv417Lifted{transform:translate(0,0) scale(1);opacity:1}.wv417CpuActionOverlay{transform:translate(0,0) scale(1);opacity:1;animation:effectIn .2s ease-out both}.wv417ShrinkToCenter{transform:translate(0,0) scale(.18)!important;opacity:0!important}.wv417CpuActionLeaving{animation:effectOut .43s ease-in both}.wv417DeckFlash{position:absolute;left:50%;top:-26px;transform:translateX(-50%);font-size:.72rem;text-transform:uppercase;color:var(--gold);letter-spacing:.14em;font-weight:1000}.wv417TurnCard{width:min(280px,68vw);height:380px;perspective:1200px}.wv417TurnCardStage{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform .42s ease}.wv417FaceUp .wv417TurnCardStage{transform:rotateY(180deg)}.wv417TurnCardFace{position:absolute;inset:0;backface-visibility:hidden;border-radius:24px;border:1px solid rgba(255,235,170,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 18px 48px rgba(0,0,0,.42)}.wv417TurnCardBack{background:linear-gradient(145deg,#71451f,#26160c);color:var(--gold2)}.wv417TurnCardFront{transform:rotateY(180deg);background:linear-gradient(180deg,#fff1bd,#b66d24);color:#2a1608}.wv417TurnCardFront .tinyCaps{color:#6b3a12}.backMark{font-size:4rem;color:var(--gold);opacity:.4}.turnCardIcon{font-size:3rem;margin-bottom:12px}.wv417TurnCard h2{font-size:1.65rem;color:inherit;margin:0 0 10px}.wv417TurnCard p{color:inherit;opacity:.82}.turnCard_bad .wv417TurnCardFront,.effect_bad .wv417TurnCardFront{background:linear-gradient(180deg,#ffd2d2,#d0584c)}.turnCard_good .wv417TurnCardFront,.effect_good .wv417TurnCardFront{background:linear-gradient(180deg,#dcffd9,#52b66d)}.turnCard_special .wv417TurnCardFront,.effect_special .wv417TurnCardFront{background:linear-gradient(180deg,#eee0ff,#9f67d8)}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:100;border:1px solid var(--line);border-radius:999px;padding:12px 18px;background:rgba(0,0,0,.78);box-shadow:var(--shadow);color:var(--ink)}.skinDialog,dialog{border:1px solid var(--line);border-radius:24px;background:linear-gradient(180deg,var(--panel2),var(--panel));color:var(--ink);box-shadow:var(--shadow);max-width:780px;width:min(92vw,780px);padding:24px}.skinDialog::backdrop,dialog::backdrop{background:rgba(0,0,0,.58)}.skinOptions,.layoutOptions{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}.skinChoice,.layoutChoice{padding:12px;border-radius:16px;border:1px solid var(--line);background:rgba(0,0,0,.22);display:grid;gap:6px;text-align:left}.activeSkin{outline:2px solid var(--gold)}.skinSwatch,.layoutSwatch{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:rgba(255,255,255,.1)}.audioGrid{display:grid;grid-template-columns:160px 1fr;gap:10px;align-items:center}.spotifyBox{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(0,0,0,.18)}.spotifyStatus{color:var(--muted);font-size:.88rem;margin-top:8px}
+
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.03);opacity:1}}@keyframes inputPop{0%{transform:scale(1)}45%{transform:scale(1.04)}100%{transform:scale(1)}}@keyframes clickableGlow{0%,100%{box-shadow:0 0 0 0 rgba(255,218,87,.38)}50%{box-shadow:0 0 0 4px rgba(255,218,87,.18)}}@keyframes effectIn{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes effectOut{to{opacity:0;transform:translateY(-10px) scale(.96)}}@keyframes cardReady{from{transform:scale(.88);opacity:.35}to{transform:scale(1);opacity:1}}
+
+@media (max-width:1120px){
+  :root{--rack-w:clamp(330px,48vw,430px);--slot-h:44px}
+  .gameHud{grid-template-columns:1fr;grid-template-rows:auto auto auto;height:auto;min-height:0}.centerBoard{grid-column:1;grid-row:1;min-height:620px}.leftCommand{grid-column:1;grid-row:2;max-height:none}.rightRail{grid-column:1;grid-row:3}.trayTheater{min-height:560px}.homePanel,.twoUp,.setupShell{grid-template-columns:1fr}.topLeftCluster .iconBtn{display:none}
+}
+@media (max-width:760px){
+  main{padding:10px}.vaultTopbar{grid-template-columns:1fr auto;grid-auto-rows:auto;height:auto}.brandPlate{grid-column:1/-1;grid-row:1}.topLeftCluster{grid-column:1;grid-row:2}.topRightCluster{grid-column:2;grid-row:2}.brandLogo{height:42px}.roomPlate span{display:none}.circleBtn{width:36px;height:36px}.gameHud{gap:10px}.centerBoard{padding:10px;min-height:560px}.trayTheater{min-height:520px}.playerRack{--rw:min(94vw,360px);padding:7px}.rackNameplate{height:24px;font-size:.82rem}.wordRack{gap:2px;padding:5px}.slotValue{font-size:8px}.slotTile,.emptySlot{border-radius:6px}.boardDeckSource{grid-template-columns:55px 72px 55px;gap:7px}.miniDeck{width:55px;height:74px}.centerTurnCardMini{width:72px;height:96px}.centerTurnCardMini strong{font-size:.65rem}.letterKeyboard{grid-template-columns:repeat(6,1fr)}.audioGrid{grid-template-columns:1fr}.manualControls{grid-template-columns:1fr}.wv417TurnCard{width:230px;height:320px}.matchStrip{font-size:.85rem}.hintRibbon{align-items:flex-start}.rackFooter{display:none}
+  .accountMiniGrid{grid-template-columns:1fr}
+  .roundLayout .playerRack,.stackedLayout .playerRack{transform:translate(-50%,-50%) scale(.92)}
+}
+.normalCard,.card-normal{--card-accent:var(--blue)}.extraCard{--card-accent:var(--green)}.multCard{--card-accent:var(--purple)}.scoreCardType{--card-accent:var(--green)}.badCardType{--card-accent:var(--red)}.exposeCard{--card-accent:var(--gold)}.centerTurnCardMini.normalCard{border-color:rgba(124,196,255,.55)}.centerTurnCardMini.extraCard,.centerTurnCardMini.scoreCardType{border-color:rgba(102,223,157,.6)}.centerTurnCardMini.badCardType{border-color:rgba(255,119,119,.65)}.centerTurnCardMini.multCard{border-color:rgba(205,167,255,.65)}.centerTurnCardMini.exposeCard{border-color:rgba(242,195,91,.7)}
+
+/* Word Vault 4.24 layout repair
+   Hard rules: no tray/name overlap, no nested game scrollbars, round and stacked are different layouts. */
+:root{
+  --rack-w:clamp(420px,34vw,560px);
+  --slot-h:clamp(46px,3vw,58px);
+  --slot-gap:4px;
+}
+html,body,main,.screen,.gameScreen{height:auto;overflow-x:hidden;}
+main,.gameScreen,#game{overflow:visible!important;}
+
+.gameHud{
+  display:grid;
+  grid-template-columns:minmax(760px,1fr) minmax(360px,430px);
+  grid-template-rows:auto auto;
+  align-items:start;
+  gap:16px;
+  height:auto!important;
+  min-height:0!important;
+  overflow:visible!important;
+}
+.centerBoard{
+  grid-column:1;
+  grid-row:1 / span 2;
+  position:relative;
+  min-height:800px;
+  height:auto;
+  overflow:visible!important;
+  padding:16px;
+}
+.leftCommand{
+  grid-column:2;
+  grid-row:1;
+  align-self:start;
+  max-height:none!important;
+  overflow:visible!important;
+}
+.rightRail{
+  grid-column:2;
+  grid-row:2;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-height:0!important;
+  height:auto!important;
+  overflow:visible!important;
+  background:transparent;
+  border:0;
+  box-shadow:none;
+}
+.railPanel,.turnPanel,.scoreCards,.activityLog{
+  max-height:none!important;
+  overflow:visible!important;
+}
+.railPanel{padding:14px;}
+.railPanel:nth-child(2){flex:0 0 auto;}
+.turnPanel{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+
+.boardAndCard{
+  position:relative;
+  flex:0 0 auto;
+  min-height:720px;
+  height:auto;
+  overflow:visible!important;
+}
+.trayTheater{
+  position:relative;
+  width:100%;
+  border-radius:28px;
+  background:
+    radial-gradient(ellipse at center,rgba(255,210,126,.16) 0 28%,transparent 29%),
+    radial-gradient(ellipse at center,rgba(0,0,0,.18) 0 55%,rgba(0,0,0,.04) 56%,transparent 68%),
+    linear-gradient(135deg,rgba(100,55,25,.55),rgba(37,22,12,.28));
+  border:1px solid rgba(255,220,140,.17);
+}
+.roundLayout .trayTheater{
+  height:720px;
+  min-height:720px;
+  overflow:hidden!important;
+}
+.roundLayout .trayTheater:before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:52%;
+  width:min(66%,680px);
+  aspect-ratio:1.92;
+  border:2px solid rgba(255,221,133,.18);
+  border-radius:50%;
+  transform:translate(-50%,-50%);
+  box-shadow:inset 0 0 60px rgba(0,0,0,.18);
+  pointer-events:none;
+}
+
+.playerRack{
+  display:grid;
+  grid-template-rows:auto auto auto;
+  gap:6px;
+  min-height:0;
+  overflow:visible;
+  padding:10px 12px 10px;
+  border-radius:18px;
+}
+.rackNameplate{
+  position:relative;
+  z-index:2;
+  height:auto!important;
+  min-height:30px;
+  margin:0!important;
+  padding:3px 8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  line-height:1.05;
+}
+.rackNameText{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.wordRack{
+  display:grid;
+  grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:var(--slot-gap);
+  align-items:end;
+  width:100%;
+  padding:6px 7px 8px;
+  margin:0!important;
+  border-radius:14px;
+}
+.slotShell{
+  min-width:0;
+  display:grid;
+  grid-template-rows:16px var(--slot-h);
+  gap:3px;
+  text-align:center;
+}
+.slotValue{
+  min-height:16px;
+  height:16px;
+  line-height:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:10px;
+  font-weight:1000;
+  color:var(--gold2);
+}
+.slotTile,.emptySlot{height:var(--slot-h);}
+.emptySlotShell{opacity:.38;}
+.rackFooter{
+  height:auto!important;
+  min-height:16px;
+  margin-top:0!important;
+}
+
+.roundLayout .playerRack{
+  position:absolute;
+  left:var(--rack-left,50%);
+  top:var(--rack-top,50%);
+  width:min(var(--rack-w),42%);
+  max-width:calc(100% - 34px);
+  transform:translate(-50%,-50%) rotate(var(--rack-rot,0deg));
+  transform-origin:center center;
+  z-index:5;
+}
+.roundLayout .playerRack.seat0{
+  width:min(620px,56%);
+  --slot-h:clamp(50px,3.2vw,64px);
+  z-index:8;
+}
+.roundLayout .playerRack:not(.seat0){
+  --slot-h:clamp(40px,2.6vw,52px);
+}
+.roundLayout .boardDeckSource{
+  position:absolute;
+  left:50%;
+  top:52%;
+  transform:translate(-50%,-50%);
+  z-index:4;
+}
+
+.stackedLayout .trayTheater{
+  min-height:760px;
+  height:auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  gap:16px;
+  padding:18px;
+  overflow:visible!important;
+}
+.stackedLayout .trayTheater:before{display:none;}
+.stackedLayout .playerRack{
+  position:relative!important;
+  left:auto!important;
+  top:auto!important;
+  width:min(720px,100%);
+  max-width:100%;
+  transform:none!important;
+  --slot-h:clamp(48px,3.4vw,64px);
+}
+.stackedLayout .boardDeckSource{
+  position:relative!important;
+  left:auto!important;
+  top:auto!important;
+  transform:none!important;
+  margin:18px auto;
+  z-index:4;
+}
+
+.targetSelectableRack{cursor:pointer;}
+.targetSelectableRack:hover{box-shadow:0 0 0 4px rgba(242,195,91,.16),0 14px 28px rgba(0,0,0,.42);}
+.selectedTargetRack{
+  outline:3px solid rgba(255,219,104,.96)!important;
+  box-shadow:0 0 0 7px rgba(255,219,104,.18),0 0 28px rgba(255,219,104,.34),0 14px 34px rgba(0,0,0,.45)!important;
+}
+#effectLayer{
+  position:absolute;
+  inset:0;
+  z-index:40;
+  pointer-events:none;
+  display:grid;
+  place-items:center;
+  overflow:hidden!important;
+}
+
+@media (max-width:1180px){
+  .gameHud{
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto auto;
+    height:auto!important;
+    min-height:0!important;
+  }
+  .centerBoard{grid-column:1;grid-row:1;min-height:0;}
+  .leftCommand{grid-column:1;grid-row:2;}
+  .rightRail{grid-column:1;grid-row:3;}
+  .roundLayout .trayTheater{
+    height:auto;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    padding:16px;
+    overflow:visible!important;
+  }
+  .roundLayout .trayTheater:before{display:none;}
+  .roundLayout .playerRack{
+    position:relative!important;
+    left:auto!important;
+    top:auto!important;
+    width:min(620px,100%);
+    transform:none!important;
+    --slot-h:clamp(46px,5vw,60px);
+  }
+  .roundLayout .boardDeckSource{
+    position:relative!important;
+    left:auto!important;
+    top:auto!important;
+    transform:none!important;
+    margin:14px auto;
+  }
+  .stackedLayout .trayTheater{min-height:0;}
+}
+@media (max-width:760px){
+  :root{--rack-w:min(94vw,520px);--slot-h:44px;--slot-gap:3px;}
+  .centerBoard{padding:10px;}
+  .playerRack{padding:8px;}
+  .rackNameplate{min-height:28px;font-size:.82rem;}
+  .slotShell{grid-template-rows:14px var(--slot-h);gap:2px;}
+  .slotValue{height:14px;line-height:14px;font-size:8px;}
+  .letterKeyboard{grid-template-columns:repeat(6,1fr);}
+}
+
+
+/* Word Vault 4.25 fixed-ratio tray cards
+   The 12 letter/card boxes must not fluidly squish. Tray width is now derived
+   from fixed slot dimensions so the cards keep the same ratio. */
+:root{
+  --slot-w:38px;
+  --slot-h:54px;
+  --slot-gap:4px;
+}
+.playerRack{
+  width:max-content!important;
+  max-width:none!important;
+}
+.wordRack{
+  grid-template-columns:repeat(12,var(--slot-w))!important;
+  width:max-content!important;
+  max-width:none!important;
+  justify-content:start!important;
+  align-items:end!important;
+}
+.slotShell{
+  width:var(--slot-w)!important;
+  min-width:var(--slot-w)!important;
+  max-width:var(--slot-w)!important;
+  grid-template-rows:16px var(--slot-h)!important;
+  flex:0 0 var(--slot-w)!important;
+}
+.slotTile,.emptySlot{
+  width:var(--slot-w)!important;
+  min-width:var(--slot-w)!important;
+  max-width:var(--slot-w)!important;
+  height:var(--slot-h)!important;
+  min-height:var(--slot-h)!important;
+  max-height:var(--slot-h)!important;
+  aspect-ratio:38/54;
+  flex:0 0 auto!important;
+}
+.roundLayout .playerRack:not(.seat0){
+  --slot-w:31px;
+  --slot-h:45px;
+}
+.roundLayout .playerRack.seat0{
+  --slot-w:40px;
+  --slot-h:58px;
+}
+.stackedLayout .playerRack{
+  --slot-w:42px;
+  --slot-h:60px;
+}
+.roundLayout .playerRack{
+  width:max-content!important;
+  max-width:none!important;
+}
+.roundLayout .playerRack.seat0{
+  width:max-content!important;
+  max-width:none!important;
+}
+.roundLayout .playerRack .rackFooter,
+.stackedLayout .playerRack .rackFooter{
+  width:100%;
+}
+.centerTurnCardMini.currentCardReady{
+  opacity:1!important;
+  transform:none;
+}
+.centerTurnCardMini.cardBackMini.currentCardReady{
+  background:linear-gradient(180deg,#6a4225,#2e1c12)!important;
+}
+@media (max-width:1180px){
+  .roundLayout .playerRack:not(.seat0),
+  .roundLayout .playerRack.seat0,
+  .stackedLayout .playerRack{
+    --slot-w:34px;
+    --slot-h:49px;
+  }
+}
+@media (max-width:760px){
+  .roundLayout .playerRack:not(.seat0),
+  .roundLayout .playerRack.seat0,
+  .stackedLayout .playerRack{
+    --slot-w:28px;
+    --slot-h:40px;
+  }
+}
+
+/* Word Vault 4.26 compact no-overlap board repair
+   - Round-table opponent trays are fixed-ratio but smaller so they never overlap.
+   - Desktop board height is capped so the whole board area fits without scrolling.
+   - Stacked layout puts the deck/current/discard group to the RIGHT of tray column. */
+@media (min-width:1181px){
+  .gameHud{
+    grid-template-columns:minmax(760px,1fr) minmax(360px,420px)!important;
+    grid-template-rows:auto auto!important;
+    gap:14px!important;
+    height:auto!important;
+    min-height:0!important;
+    align-items:start!important;
+    overflow:visible!important;
+  }
+  .centerBoard{
+    min-height:0!important;
+    height:auto!important;
+    padding:12px 14px!important;
+    overflow:visible!important;
+  }
+  .matchStrip{
+    margin-bottom:8px!important;
+  }
+  .pendingBanner,.manualBanner{
+    padding:8px 10px!important;
+    margin-bottom:8px!important;
+  }
+  .boardAndCard{
+    min-height:0!important;
+    height:auto!important;
+    flex:0 0 auto!important;
+    overflow:visible!important;
+  }
+  .trayTheater{
+    overflow:hidden!important;
+  }
+  .roundLayout .trayTheater{
+    height:clamp(560px, calc(100vh - 205px), 635px)!important;
+    min-height:560px!important;
+    max-height:635px!important;
+    padding:0!important;
+  }
+  .roundLayout .trayTheater:before{
+    top:54%!important;
+    width:min(66%,660px)!important;
+  }
+  .hintRibbon{
+    margin-top:8px!important;
+    padding:8px 10px!important;
+  }
+
+  /* Round-table trays: fixed card ratio, not fluid, but compact enough to avoid overlap. */
+  .roundLayout .playerRack{
+    width:max-content!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+  .roundLayout .playerRack:not(.seat0){
+    --slot-w:24px!important;
+    --slot-h:35px!important;
+    --slot-gap:3px!important;
+    padding:8px 10px 8px!important;
+    border-radius:16px!important;
+  }
+  .roundLayout .playerRack.seat0{
+    --slot-w:38px!important;
+    --slot-h:54px!important;
+    --slot-gap:4px!important;
+    padding:9px 12px 9px!important;
+    border-radius:18px!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .rackNameplate{
+    min-height:24px!important;
+    padding:2px 6px!important;
+    font-size:.88rem!important;
+    margin:0!important;
+  }
+  .roundLayout .playerRack.seat0 .rackNameplate{
+    min-height:28px!important;
+    padding:2px 8px!important;
+    margin:0!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .avatar{
+    width:28px!important;
+    height:28px!important;
+    font-size:.68rem!important;
+  }
+  .roundLayout .wordRack{
+    grid-template-columns:repeat(12,var(--slot-w))!important;
+    gap:var(--slot-gap)!important;
+    width:max-content!important;
+    max-width:none!important;
+    padding:5px 6px 6px!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .slotShell{
+    width:var(--slot-w)!important;
+    min-width:var(--slot-w)!important;
+    max-width:var(--slot-w)!important;
+    grid-template-rows:13px var(--slot-h)!important;
+    gap:2px!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .slotValue{
+    height:13px!important;
+    min-height:13px!important;
+    line-height:13px!important;
+    font-size:8px!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .slotTile,
+  .roundLayout .playerRack:not(.seat0) .emptySlot{
+    width:var(--slot-w)!important;
+    height:var(--slot-h)!important;
+    min-width:var(--slot-w)!important;
+    min-height:var(--slot-h)!important;
+    border-radius:7px!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .rackFooter{
+    min-height:12px!important;
+    height:12px!important;
+    margin-top:4px!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .gemRow{
+    gap:2px!important;
+  }
+  .roundLayout .playerRack:not(.seat0) .gemRow span{
+    width:6px!important;
+    height:6px!important;
+  }
+
+  .roundLayout .boardDeckSource{
+    top:54%!important;
+    grid-template-columns:64px 84px 64px!important;
+    gap:12px!important;
+  }
+  .roundLayout .miniDeck{
+    width:64px!important;
+    height:82px!important;
+  }
+  .roundLayout .centerTurnCardMini{
+    width:84px!important;
+    height:112px!important;
+    padding:7px!important;
+  }
+  .roundLayout .centerTurnCardMini strong{
+    font-size:.72rem!important;
+    line-height:1.05!important;
+  }
+  .roundLayout .miniCardTiny{
+    font-size:.52rem!important;
+  }
+
+  /* Stacked mode: deck/current/discard sits to the right of the tray column. */
+  .stackedLayout .trayTheater{
+    height:clamp(520px, calc(100vh - 205px), 635px)!important;
+    min-height:520px!important;
+    max-height:635px!important;
+    display:grid!important;
+    grid-template-columns:max-content auto!important;
+    grid-template-areas:"trays deck"!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:18px!important;
+    padding:14px!important;
+    overflow:hidden!important;
+  }
+  .stackedRackColumn{
+    grid-area:trays!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:12px!important;
+    min-width:0!important;
+    max-height:100%!important;
+  }
+  .stackedLayout .boardDeckSource{
+    grid-area:deck!important;
+    position:relative!important;
+    left:auto!important;
+    top:auto!important;
+    transform:none!important;
+    margin:0!important;
+    align-self:center!important;
+    justify-self:center!important;
+    grid-template-columns:58px 78px 58px!important;
+    gap:10px!important;
+  }
+  .stackedLayout .miniDeck{
+    width:58px!important;
+    height:76px!important;
+  }
+  .stackedLayout .centerTurnCardMini{
+    width:78px!important;
+    height:104px!important;
+  }
+  .stackedLayout .playerRack{
+    --slot-w:32px!important;
+    --slot-h:46px!important;
+    --slot-gap:3px!important;
+    width:max-content!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+  .stackedLayout .rackNameplate{
+    min-height:24px!important;
+    padding:2px 6px!important;
+  }
+  .stackedLayout .wordRack{
+    grid-template-columns:repeat(12,var(--slot-w))!important;
+    gap:var(--slot-gap)!important;
+    width:max-content!important;
+    max-width:none!important;
+    padding:5px 6px 6px!important;
+  }
+  .stackedLayout .slotShell{
+    width:var(--slot-w)!important;
+    min-width:var(--slot-w)!important;
+    max-width:var(--slot-w)!important;
+    grid-template-rows:13px var(--slot-h)!important;
+  }
+  .stackedLayout .slotTile,
+  .stackedLayout .emptySlot{
+    width:var(--slot-w)!important;
+    height:var(--slot-h)!important;
+    min-width:var(--slot-w)!important;
+    min-height:var(--slot-h)!important;
+  }
+}
+
+@media (min-width:1181px) and (max-height:820px){
+  .roundLayout .trayTheater,
+  .stackedLayout .trayTheater{
+    height:540px!important;
+    min-height:540px!important;
+    max-height:540px!important;
+  }
+  .roundLayout .playerRack:not(.seat0){
+    --slot-w:22px!important;
+    --slot-h:32px!important;
+    --slot-gap:3px!important;
+  }
+  .roundLayout .playerRack.seat0{
+    --slot-w:34px!important;
+    --slot-h:48px!important;
+  }
+  .stackedLayout .playerRack{
+    --slot-w:29px!important;
+    --slot-h:42px!important;
+  }
+  .roundLayout .boardDeckSource,
+  .stackedLayout .boardDeckSource{
+    transform:translate(-50%,-50%) scale(.92)!important;
+  }
+  .stackedLayout .boardDeckSource{
+    transform:none!important;
+  }
+}
+
+@media (max-width:1180px){
+  .stackedRackColumn{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    gap:12px!important;
+  }
+}
+
+
+/* Word Vault 4.29 active-turn traveling edge glow only. No layout/spacing changes. */
+.playerRack.activeRack::after{
+  content:"";
+  position:absolute;
+  left:0;
+  top:0;
+  width:56px;
+  height:18px;
+  border-radius:999px;
+  pointer-events:none;
+  z-index:12;
+  background:radial-gradient(ellipse at center, rgba(102,223,157,.98) 0%, rgba(124,196,255,.82) 32%, rgba(102,223,157,.22) 62%, rgba(102,223,157,0) 76%);
+  filter:blur(1.2px) drop-shadow(0 0 10px rgba(102,223,157,.75)) drop-shadow(0 0 16px rgba(124,196,255,.42));
+  opacity:.96;
+  transform:translate(-38%,-78%);
+  animation:wv429ActiveTurnEdgeGlow 7.5s linear infinite;
+}
+@keyframes wv429ActiveTurnEdgeGlow{
+  0%{left:0%;top:0%;width:56px;height:18px;transform:translate(-38%,-78%);}
+  24%{left:100%;top:0%;width:56px;height:18px;transform:translate(-62%,-78%);}
+  25%{left:100%;top:0%;width:18px;height:56px;transform:translate(-22%,-38%);}
+  49%{left:100%;top:100%;width:18px;height:56px;transform:translate(-22%,-62%);}
+  50%{left:100%;top:100%;width:56px;height:18px;transform:translate(-62%,-22%);}
+  74%{left:0%;top:100%;width:56px;height:18px;transform:translate(-38%,-22%);}
+  75%{left:0%;top:100%;width:18px;height:56px;transform:translate(-78%,-62%);}
+  99%{left:0%;top:0%;width:18px;height:56px;transform:translate(-78%,-38%);}
+  100%{left:0%;top:0%;width:56px;height:18px;transform:translate(-38%,-78%);}
+}
+
+/* Word Vault 4.31 keyboard stability + board fullscreen drawer
+   - Normal layout/board formatting is not rearranged.
+   - The right-side keyboard reserves one stable footprint so it cannot shift the page.
+   - Fullscreen mode shows only the board rectangle with a small floating Guess drawer.
+   - The fullscreen drawer intentionally has no on-screen letter keyboard. */
+.letterKeyboard{
+  grid-template-columns:repeat(7,minmax(0,1fr))!important;
+  grid-auto-rows:34px!important;
+  grid-template-rows:repeat(5,34px)!important;
+  height:190px!important;
+  min-height:190px!important;
+  max-height:190px!important;
+  align-content:start!important;
+  overflow:hidden!important;
+}
+.keyBtn{
+  height:34px!important;
+  min-height:34px!important;
+  padding:0!important;
+  display:grid!important;
+  place-items:center!important;
+  line-height:1!important;
+}
+.keyBtn[hidden],.keyBtn.used,.keyBtn:disabled{
+  display:grid!important;
+  visibility:visible!important;
+}
+
+.boardFullscreenFab{
+  position:absolute;
+  right:14px;
+  top:12px;
+  z-index:32;
+  width:38px;
+  height:38px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.46);
+  box-shadow:0 10px 24px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.14);
+  color:var(--gold2);
+  font-size:1.15rem;
+  display:grid;
+  place-items:center;
+}
+.boardFullscreenFab:hover{box-shadow:0 0 0 4px rgba(242,195,91,.15),0 12px 28px rgba(0,0,0,.38);}
+.boardFullscreenTools{display:none;}
+
+.centerBoard:fullscreen{
+  width:100vw!important;
+  height:100vh!important;
+  max-width:none!important;
+  max-height:none!important;
+  border-radius:0!important;
+  padding:14px!important;
+  overflow:hidden!important;
+  background:
+    radial-gradient(circle at 50% 18%,rgba(255,219,120,.18),transparent 38%),
+    linear-gradient(180deg,var(--panel2),var(--panel))!important;
+}
+.centerBoard:fullscreen .matchStrip,
+.centerBoard:fullscreen .pendingBanner,
+.centerBoard:fullscreen .manualBanner,
+.centerBoard:fullscreen .hintRibbon,
+.centerBoard:fullscreen .boardFullscreenFab{
+  display:none!important;
+}
+.centerBoard:fullscreen .boardAndCard{
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  display:block!important;
+  overflow:hidden!important;
+}
+.centerBoard:fullscreen .trayTheater{
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:hidden!important;
+}
+.centerBoard:fullscreen .roundLayout .trayTheater,
+.centerBoard:fullscreen .stackedLayout .trayTheater{
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+}
+.centerBoard:fullscreen .roundLayout .trayTheater:before{
+  width:min(68%,780px)!important;
+  top:53%!important;
+}
+.centerBoard:fullscreen .boardFullscreenTools{
+  display:block;
+  position:absolute;
+  right:18px;
+  bottom:18px;
+  z-index:90;
+  pointer-events:none;
+}
+.centerBoard:fullscreen .boardFullscreenTools button,
+.centerBoard:fullscreen .boardFullscreenTools input,
+.centerBoard:fullscreen .boardFullscreenTools select{
+  pointer-events:auto;
+}
+.centerBoard:fullscreen .fsGuessToggle{
+  position:absolute;
+  right:0;
+  bottom:0;
+  border-radius:999px;
+  padding:12px 18px;
+  min-width:92px;
+  background:linear-gradient(180deg,#61c8ff,#236ab2);
+  box-shadow:0 14px 34px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.08) inset;
+  color:white;
+  font-weight:1000;
+}
+.centerBoard:fullscreen .boardExitFullscreenBtn{
+  position:absolute;
+  right:0;
+  bottom:54px;
+  width:36px;
+  height:36px;
+  border-radius:999px;
+  background:rgba(0,0,0,.58);
+  border:1px solid var(--line);
+  color:var(--gold2);
+  font-size:1.25rem;
+  box-shadow:0 10px 26px rgba(0,0,0,.36);
+}
+.centerBoard:fullscreen .boardFullscreenGuess{
+  position:absolute;
+  right:0;
+  bottom:58px;
+  width:min(340px,calc(100vw - 36px));
+  padding:14px;
+  border-radius:18px;
+  border:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(82,50,29,.97),rgba(57,34,20,.97));
+  box-shadow:0 18px 48px rgba(0,0,0,.48);
+  opacity:0;
+  transform:translateY(10px) scale(.96);
+  pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease;
+}
+.centerBoard:fullscreen .boardFullscreenGuess.open{
+  opacity:1;
+  transform:translateY(0) scale(1);
+  pointer-events:auto;
+}
+.centerBoard:fullscreen .boardFullscreenGuess .commandTitle{
+  font-size:1.05rem;
+  margin-bottom:8px;
+}
+.centerBoard:fullscreen .boardFullscreenGuess label{
+  margin:8px 0 5px;
+  font-size:.72rem;
+}
+.centerBoard:fullscreen .boardFullscreenGuess input,
+.centerBoard:fullscreen .boardFullscreenGuess select{
+  padding:9px 10px;
+  border-radius:12px;
+}
+.centerBoard:fullscreen .boardFullscreenGuess .blueBtn,
+.centerBoard:fullscreen .boardFullscreenGuess .purpleBtn{
+  width:100%;
+  margin-top:8px;
+  padding:10px 12px;
+}
+.centerBoard:fullscreen .boardFullscreenGuess .divider{
+  margin:10px 0;
+}
+.centerBoard:fullscreen #effectLayer{
+  position:absolute;
+  inset:0;
+}
+
+@media (max-width:760px){
+  .letterKeyboard{
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    grid-template-rows:repeat(5,34px)!important;
+    height:190px!important;
+    min-height:190px!important;
+  }
+}
+
+
+/* Word Vault 4.32 fullscreen persistence fix
+   Fullscreen now lives on the stable #game shell so state re-renders do not exit fullscreen. */
+#game:fullscreen{
+  width:100vw!important;
+  height:100vh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  background:
+    radial-gradient(circle at 50% 18%,rgba(255,219,120,.18),transparent 38%),
+    linear-gradient(180deg,var(--panel2),var(--panel))!important;
+}
+#game:fullscreen .gameHud{
+  width:100vw!important;
+  height:100vh!important;
+  min-height:0!important;
+  max-height:none!important;
+  display:block!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+}
+#game:fullscreen .leftCommand,
+#game:fullscreen .rightRail{
+  display:none!important;
+}
+#game:fullscreen .centerBoard{
+  position:relative!important;
+  width:100vw!important;
+  height:100vh!important;
+  max-width:none!important;
+  max-height:none!important;
+  border-radius:0!important;
+  padding:14px!important;
+  overflow:hidden!important;
+  background:
+    radial-gradient(circle at 50% 18%,rgba(255,219,120,.18),transparent 38%),
+    linear-gradient(180deg,var(--panel2),var(--panel))!important;
+}
+#game:fullscreen .centerBoard .matchStrip,
+#game:fullscreen .centerBoard .pendingBanner,
+#game:fullscreen .centerBoard .manualBanner,
+#game:fullscreen .centerBoard .hintRibbon,
+#game:fullscreen .centerBoard .boardFullscreenFab{
+  display:none!important;
+}
+#game:fullscreen .centerBoard .boardAndCard{
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  display:block!important;
+  overflow:hidden!important;
+}
+#game:fullscreen .centerBoard .trayTheater{
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:hidden!important;
+}
+#game:fullscreen .centerBoard .roundLayout .trayTheater,
+#game:fullscreen .centerBoard .stackedLayout .trayTheater{
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+}
+#game:fullscreen .centerBoard .roundLayout .trayTheater:before{
+  width:min(68%,780px)!important;
+  top:53%!important;
+}
+#game:fullscreen .centerBoard .boardFullscreenTools{
+  display:block;
+  position:absolute;
+  right:18px;
+  bottom:18px;
+  z-index:90;
+  pointer-events:none;
+}
+#game:fullscreen .centerBoard .boardFullscreenTools button,
+#game:fullscreen .centerBoard .boardFullscreenTools input,
+#game:fullscreen .centerBoard .boardFullscreenTools select{
+  pointer-events:auto;
+}
+#game:fullscreen .centerBoard .fsGuessToggle{
+  position:absolute;
+  right:0;
+  bottom:0;
+  border-radius:999px;
+  padding:12px 18px;
+  min-width:92px;
+  background:linear-gradient(180deg,#61c8ff,#236ab2);
+  box-shadow:0 14px 34px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.08) inset;
+  color:white;
+  font-weight:1000;
+}
+#game:fullscreen .centerBoard .boardExitFullscreenBtn{
+  position:absolute;
+  right:0;
+  bottom:54px;
+  width:36px;
+  height:36px;
+  border-radius:999px;
+  background:rgba(0,0,0,.58);
+  border:1px solid var(--line);
+  color:var(--gold2);
+  font-size:1.25rem;
+  box-shadow:0 10px 26px rgba(0,0,0,.36);
+}
+#game:fullscreen .centerBoard .boardFullscreenGuess{
+  position:absolute;
+  right:0;
+  bottom:58px;
+  width:min(340px,calc(100vw - 36px));
+  padding:14px;
+  border-radius:18px;
+  border:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(82,50,29,.97),rgba(57,34,20,.97));
+  box-shadow:0 18px 48px rgba(0,0,0,.48);
+  opacity:0;
+  transform:translateY(10px) scale(.96);
+  pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease;
+}
+#game:fullscreen .centerBoard .boardFullscreenGuess.open{
+  opacity:1;
+  transform:translateY(0) scale(1);
+  pointer-events:auto;
+}
+#game:fullscreen .centerBoard .boardFullscreenGuess .commandTitle{
+  font-size:1.05rem;
+  margin-bottom:8px;
+}
+#game:fullscreen .centerBoard .boardFullscreenGuess label{
+  margin:8px 0 5px;
+  font-size:.72rem;
+}
+#game:fullscreen .centerBoard .boardFullscreenGuess input,
+#game:fullscreen .centerBoard .boardFullscreenGuess select{
+  padding:9px 10px;
+  border-radius:12px;
+}
+#game:fullscreen .centerBoard .boardFullscreenGuess .blueBtn,
+#game:fullscreen .centerBoard .boardFullscreenGuess .purpleBtn{
+  width:100%;
+  margin-top:8px;
+  padding:10px 12px;
+}
+#game:fullscreen .centerBoard .boardFullscreenGuess .divider{
+  margin:10px 0;
+}
+#game:fullscreen .centerBoard #effectLayer{
+  position:absolute;
+  inset:0;
+}
+
+/* Word Vault 4.33 mobile phone stacked layout
+   Desktop/fullscreen formatting is locked. These rules only apply to phone width.
+   Phone view is always stacked, never round-table, and uses the in-game keyboard. */
+@media (max-width:760px){
+  html,body{
+    width:100%;
+    overflow-x:hidden!important;
+  }
+  body{
+    min-width:0!important;
+  }
+  .vaultTopbar{
+    height:auto!important;
+    min-height:54px!important;
+    grid-template-columns:auto minmax(78px,1fr) auto!important;
+    grid-template-rows:auto!important;
+    gap:6px!important;
+    padding:6px 7px!important;
+    position:sticky!important;
+  }
+  .vaultTopbar .brandPlate{
+    grid-column:2!important;
+    grid-row:1!important;
+    min-width:0!important;
+  }
+  .vaultTopbar .brandLogo{
+    height:34px!important;
+    max-width:128px!important;
+  }
+  .vaultTopbar .topLeftCluster{
+    grid-column:1!important;
+    grid-row:1!important;
+    gap:5px!important;
+    min-width:0!important;
+  }
+  .vaultTopbar .topRightCluster{
+    grid-column:3!important;
+    grid-row:1!important;
+    gap:4px!important;
+    justify-content:flex-end!important;
+    min-width:0!important;
+  }
+  .vaultTopbar .iconBtn,
+  .vaultTopbar .circleBtn{
+    width:31px!important;
+    height:31px!important;
+    font-size:.88rem!important;
+  }
+  .vaultTopbar .roomPlate{
+    padding:5px 7px!important;
+    border-radius:11px!important;
+    gap:5px!important;
+  }
+  .vaultTopbar .roomPlate strong{
+    font-size:.9rem!important;
+    letter-spacing:.04em!important;
+  }
+  .vaultTopbar .roomPlate em{
+    font-size:.8rem!important;
+  }
+  main{
+    padding:5px!important;
+    min-height:auto!important;
+  }
+
+  .gameHud.phoneGameHud{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:6px!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    overflow:visible!important;
+    align-items:stretch!important;
+  }
+  .phoneGameHud .centerBoard.mobilePhoneBoard{
+    order:1!important;
+    grid-column:auto!important;
+    grid-row:auto!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:0!important;
+    height:auto!important;
+    padding:6px!important;
+    border-radius:14px!important;
+    overflow:visible!important;
+  }
+  .phoneGameHud .leftCommand{
+    order:2!important;
+    grid-column:auto!important;
+    grid-row:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+    padding:8px!important;
+    border-radius:14px!important;
+  }
+  .phoneGameHud .leftCommand.mobileCommandHidden{
+    display:none!important;
+  }
+  .phoneGameHud .rightRail{
+    display:none!important;
+  }
+
+  .phoneGameHud .matchStrip{
+    display:grid!important;
+    grid-template-columns:1fr auto 1fr!important;
+    gap:4px!important;
+    margin:0 0 5px!important;
+    align-items:center!important;
+  }
+  .phoneGameHud .matchPill,
+  .phoneGameHud .timerPill{
+    min-width:0!important;
+    justify-content:center!important;
+    padding:5px 4px!important;
+    border-radius:9px!important;
+    font-size:.68rem!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  .phoneGameHud .themePill{
+    display:none!important;
+  }
+  .phoneGameHud .pendingBanner,
+  .phoneGameHud .manualBanner{
+    margin:4px 0!important;
+    padding:7px!important;
+    border-radius:10px!important;
+    font-size:.78rem!important;
+  }
+  .phoneGameHud .hintRibbon,
+  .phoneGameHud .boardFullscreenFab{
+    display:none!important;
+  }
+
+  .phoneGameHud .boardAndCard.mobileStackBoard,
+  .phoneGameHud .boardAndCard.stackedLayout{
+    display:block!important;
+    min-height:0!important;
+    height:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+    flex:0 0 auto!important;
+  }
+  .phoneGameHud .trayTheater,
+  .phoneGameHud .roundLayout .trayTheater,
+  .phoneGameHud .stackedLayout .trayTheater{
+    position:relative!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:8px!important;
+    width:100%!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    padding:8px 5px!important;
+    border-radius:14px!important;
+    overflow:visible!important;
+    background:linear-gradient(180deg,rgba(76,43,22,.55),rgba(34,22,14,.42))!important;
+  }
+  .phoneGameHud .trayTheater:before,
+  .phoneGameHud .roundLayout .trayTheater:before,
+  .phoneGameHud .stackedLayout .trayTheater:before{
+    display:none!important;
+  }
+  .phoneGameHud .stackedRackColumn{
+    order:1!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    justify-content:flex-start!important;
+    gap:8px!important;
+    width:100%!important;
+    max-height:none!important;
+  }
+
+  .phoneGameHud .playerRack,
+  .phoneGameHud .roundLayout .playerRack,
+  .phoneGameHud .stackedLayout .playerRack,
+  .phoneGameHud .roundLayout .playerRack.seat0,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0){
+    --slot-w:22px!important;
+    --slot-h:31px!important;
+    --slot-gap:2px!important;
+    position:relative!important;
+    left:auto!important;
+    top:auto!important;
+    transform:none!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+    padding:6px 7px 7px!important;
+    border-radius:13px!important;
+    overflow:visible!important;
+  }
+  .phoneGameHud .rackNameplate,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0) .rackNameplate,
+  .phoneGameHud .roundLayout .playerRack.seat0 .rackNameplate,
+  .phoneGameHud .stackedLayout .rackNameplate{
+    height:auto!important;
+    min-height:22px!important;
+    justify-content:flex-start!important;
+    gap:6px!important;
+    margin:0 0 4px!important;
+    padding:0!important;
+    font-size:.75rem!important;
+    line-height:1.1!important;
+    overflow:visible!important;
+  }
+  .phoneGameHud .avatar,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0) .avatar{
+    width:28px!important;
+    height:28px!important;
+    min-width:28px!important;
+    font-size:.65rem!important;
+  }
+  .phoneGameHud .rackNameText{
+    max-width:calc(100vw - 70px)!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  .phoneGameHud .wordRack,
+  .phoneGameHud .roundLayout .wordRack,
+  .phoneGameHud .stackedLayout .wordRack{
+    grid-template-columns:repeat(12,var(--slot-w))!important;
+    gap:var(--slot-gap)!important;
+    width:max-content!important;
+    max-width:100%!important;
+    justify-content:start!important;
+    align-items:end!important;
+    padding:4px 5px 5px!important;
+    border-radius:10px!important;
+    margin:0 auto!important;
+    overflow:visible!important;
+  }
+  .phoneGameHud .slotShell,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0) .slotShell,
+  .phoneGameHud .stackedLayout .slotShell{
+    width:var(--slot-w)!important;
+    min-width:var(--slot-w)!important;
+    max-width:var(--slot-w)!important;
+    grid-template-rows:11px var(--slot-h)!important;
+    gap:1px!important;
+  }
+  .phoneGameHud .slotValue,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0) .slotValue{
+    height:11px!important;
+    min-height:11px!important;
+    line-height:11px!important;
+    font-size:7px!important;
+  }
+  .phoneGameHud .slotTile,
+  .phoneGameHud .emptySlot,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0) .slotTile,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0) .emptySlot,
+  .phoneGameHud .stackedLayout .slotTile,
+  .phoneGameHud .stackedLayout .emptySlot{
+    width:var(--slot-w)!important;
+    min-width:var(--slot-w)!important;
+    max-width:var(--slot-w)!important;
+    height:var(--slot-h)!important;
+    min-height:var(--slot-h)!important;
+    max-height:var(--slot-h)!important;
+    border-radius:6px!important;
+  }
+  .phoneGameHud .rackFooter{
+    display:none!important;
+  }
+
+  .phoneGameHud .boardDeckSource,
+  .phoneGameHud .roundLayout .boardDeckSource,
+  .phoneGameHud .stackedLayout .boardDeckSource{
+    order:2!important;
+    position:relative!important;
+    left:auto!important;
+    top:auto!important;
+    transform:none!important;
+    display:grid!important;
+    grid-template-columns:54px 74px 54px!important;
+    gap:10px!important;
+    align-items:center!important;
+    justify-content:center!important;
+    justify-items:center!important;
+    width:100%!important;
+    margin:2px 0 0!important;
+    z-index:4!important;
+  }
+  .phoneGameHud .miniDeck{
+    width:54px!important;
+    height:72px!important;
+    border-radius:11px!important;
+  }
+  .phoneGameHud .miniDeck span{
+    font-size:1rem!important;
+  }
+  .phoneGameHud .miniDeck strong{
+    font-size:.58rem!important;
+  }
+  .phoneGameHud .centerTurnCardMini{
+    width:74px!important;
+    height:98px!important;
+    border-radius:12px!important;
+    padding:6px!important;
+  }
+  .phoneGameHud .centerTurnCardMini strong{
+    font-size:.62rem!important;
+    line-height:1.06!important;
+  }
+  .phoneGameHud .miniCardTiny{
+    font-size:.48rem!important;
+  }
+
+  .phoneGameHud.phoneYourTurn .leftCommand.mobileCommandVisible{
+    display:block!important;
+  }
+  .phoneGameHud .leftCommand .commandTitle{
+    font-size:1rem!important;
+    margin-bottom:6px!important;
+  }
+  .phoneGameHud .leftCommand label{
+    margin:6px 0 4px!important;
+    font-size:.68rem!important;
+  }
+  .phoneGameHud .leftCommand select,
+  .phoneGameHud .leftCommand input{
+    padding:8px 9px!important;
+    border-radius:10px!important;
+    font-size:.92rem!important;
+  }
+  .phoneGameHud #symbolInput{
+    pointer-events:none!important;
+    caret-color:transparent!important;
+  }
+  .phoneGameHud .keyboardCaption{
+    margin:7px 0 5px!important;
+    font-size:.62rem!important;
+  }
+  .phoneGameHud .letterKeyboard{
+    grid-template-columns:repeat(7,minmax(0,1fr))!important;
+    grid-auto-rows:38px!important;
+    grid-template-rows:none!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    gap:5px!important;
+    margin:6px 0 8px!important;
+    overflow:visible!important;
+  }
+  .phoneGameHud .keyBtn{
+    height:38px!important;
+    min-height:38px!important;
+    border-radius:10px!important;
+    font-size:.92rem!important;
+  }
+  .phoneGameHud .wideKey{
+    grid-column:span 2!important;
+  }
+  .phoneGameHud #askBtn{
+    width:100%!important;
+    padding:11px 12px!important;
+  }
+  .phoneGameHud .fullGuessBlock,
+  .phoneGameHud .tipBox,
+  .phoneGameHud .hostForceBtn{
+    display:none!important;
+  }
+  .phoneGameHud .manualRevealBlock .hint{
+    display:none!important;
+  }
+
+  #game:fullscreen .phoneGameHud .rightRail,
+  #game:fullscreen .phoneGameHud .leftCommand{
+    display:none!important;
+  }
+}
+
+@media (max-width:360px){
+  .phoneGameHud .playerRack,
+  .phoneGameHud .roundLayout .playerRack,
+  .phoneGameHud .stackedLayout .playerRack,
+  .phoneGameHud .roundLayout .playerRack.seat0,
+  .phoneGameHud .roundLayout .playerRack:not(.seat0){
+    --slot-w:20px!important;
+    --slot-h:29px!important;
+    --slot-gap:2px!important;
+  }
+  .phoneGameHud .boardDeckSource,
+  .phoneGameHud .roundLayout .boardDeckSource,
+  .phoneGameHud .stackedLayout .boardDeckSource{
+    grid-template-columns:50px 70px 50px!important;
+    gap:8px!important;
+  }
+}
+
+
+/* Word Vault 4.34 tiny desktop stability/glow fix only.
+   No desktop tray positions, sizing, fullscreen, mobile layout, or gameplay formatting changed. */
+html{scrollbar-gutter:stable;}
+.gameHud:not(.phoneGameHud) .leftCommand,
+.gameHud:not(.phoneGameHud) .railPanel{
+  scrollbar-gutter:stable;
+}
+.gameHud:not(.phoneGameHud) .roundLayout .playerRack{
+  transition:box-shadow .18s ease, outline-color .18s ease!important;
+  transform:translate(-50%,-50%) rotate(var(--rack-rot,0deg))!important;
+}
+.playerRack.activeRack:not(.turnOwnerRack)::after{
+  display:none!important;
+}
+.playerRack.askedTargetRack:not(.turnOwnerRack){
+  outline:3px solid rgba(255,219,104,.92)!important;
+  box-shadow:0 0 0 7px rgba(255,219,104,.16),0 0 28px rgba(255,219,104,.30),0 14px 34px rgba(0,0,0,.45)!important;
+}
+.playerRack.askedTargetRack:not(.turnOwnerRack)::after{
+  display:none!important;
+}
+
+/* Word Vault 4.37 lobby CPU controls removed; endgame overlay retained.
+   No desktop/mobile board formatting changes. */
+#game{position:relative;}
+.endResultsOverlay{position:absolute;inset:0;z-index:900;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 42%,rgba(255,215,107,.18),rgba(10,6,3,.72) 52%,rgba(5,3,2,.84));backdrop-filter:blur(3px);overflow:hidden;pointer-events:auto;animation:endOverlayFadeIn .28s ease-out both;}
+.endResultsCard{position:relative;z-index:2;width:min(92vw,620px);max-height:min(86vh,720px);overflow:visible;border:1px solid rgba(255,221,120,.46);border-radius:28px;background:linear-gradient(180deg,rgba(72,43,20,.98),rgba(22,13,7,.98));box-shadow:0 28px 90px rgba(0,0,0,.62),0 0 48px rgba(255,190,76,.18);padding:26px;text-align:center;animation:endCardPop .45s cubic-bezier(.17,.87,.26,1.18) both;}
+.endResultsCard h1{margin:4px 0 8px;font-size:clamp(2.1rem,7vw,4rem);color:var(--gold);text-shadow:0 3px 0 rgba(0,0,0,.28);}
+.endWinnerLine{margin:0 0 16px;color:var(--gold2);font-size:1.16rem;font-weight:1000;}
+.endResultsTable{display:grid;gap:8px;margin:16px 0;text-align:left;}
+.endResultRow{display:grid;grid-template-columns:64px 1fr 86px 74px;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(0,0,0,.22);padding:10px 12px;}
+.endResultRow.place1{border-color:rgba(255,219,104,.62);background:linear-gradient(90deg,rgba(255,197,65,.20),rgba(0,0,0,.20));}
+.endPlace{font-weight:1000;color:var(--gold2);}
+.endPlayerName{font-weight:1000;color:#fff4d6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.endPlayerName em{font-size:.62rem;border:1px solid var(--line);border-radius:999px;padding:2px 6px;color:#b8f4ff;font-style:normal;margin-left:5px;}
+.endHidden{color:var(--muted);font-size:.86rem;text-align:right;}
+.endScore{font-size:1.35rem;font-weight:1000;color:#fff;text-align:right;}
+.endResultsHint{margin:10px 0 0;}
+.endResultsActions{justify-content:center;margin-top:16px;}
+.confettiLayer{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;}
+.confettiPiece{position:absolute;left:50%;top:48%;width:9px;height:16px;border-radius:3px;background:hsl(var(--hue),92%,62%);box-shadow:0 0 10px hsla(var(--hue),92%,62%,.45);opacity:0;transform-origin:center;animation:confettiShoot 1.35s cubic-bezier(.12,.72,.24,1) var(--delay) both;}
+.confettiPiece:nth-child(3n){width:14px;height:7px;border-radius:999px;}
+.confettiPiece:nth-child(4n){background:var(--gold2);}
+.confettiPiece:nth-child(5n){background:#73e7ff;}
+@keyframes endOverlayFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes endCardPop{0%{opacity:0;transform:translateY(22px) scale(.9)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes confettiShoot{0%{opacity:0;transform:rotate(var(--angle)) translateX(0) rotate(0deg) scale(.7)}12%{opacity:1}78%{opacity:1}100%{opacity:0;transform:rotate(var(--angle)) translateX(var(--dist)) rotate(var(--spin)) scale(1)}}
+@media (max-width:620px){.endResultsOverlay{padding:12px}.endResultsCard{padding:18px;border-radius:22px}.endResultRow{grid-template-columns:48px 1fr 58px;gap:7px}.endHidden{display:none}.endScore{font-size:1.12rem}.endWinnerLine{font-size:1rem}}
+
+/* Word Vault 4.38 solved-word overlay only. No board/tray formatting changes. */
+.solvedWordOverlay{
+  position:relative;
+  min-width:min(88%,360px);
+  max-width:min(88%,520px);
+  border-radius:24px;
+  border:1px solid rgba(255,255,255,.24);
+  background:linear-gradient(180deg,rgba(55,34,22,.97),rgba(22,15,10,.98));
+  box-shadow:0 24px 70px rgba(0,0,0,.52),0 0 42px rgba(102,223,157,.20);
+  padding:24px 22px;
+  text-align:center;
+  animation:effectIn .22s ease-out both;
+}
+.solvedWordOverlay strong{
+  display:block;
+  color:var(--gold2);
+  font-size:1.05rem;
+  margin-top:6px;
+}
+.solvedWordLetters{
+  display:flex;
+  justify-content:center;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
+.solvedWordLetters span{
+  min-width:34px;
+  height:46px;
+  display:grid;
+  place-items:center;
+  border-radius:10px;
+  border:1px solid rgba(255,235,170,.48);
+  background:linear-gradient(180deg,#fff1bd,#d69b3b);
+  color:#201105;
+  font-size:1.45rem;
+  line-height:1;
+  font-weight:1000;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 8px 16px rgba(0,0,0,.30);
+  animation:inputPop .38s ease both;
+}
+@media (max-width:760px){
+  .solvedWordOverlay{min-width:min(92%,320px);padding:20px 16px;}
+  .solvedWordLetters{gap:4px;}
+  .solvedWordLetters span{min-width:27px;height:38px;font-size:1.15rem;border-radius:8px;}
+}
+
+
+/* Word Vault 4.40 player media tiles
+   Adds a 1:1 avatar/video-ready tile beside each live-game tray without
+   changing tray width, tray/card sizing, or board layout math. */
+.playerRack.hasRackMediaTile{
+  overflow:visible!important;
+}
+.rackMediaTile{
+  position:absolute;
+  top:0;
+  bottom:0;
+  left:var(--rack-media-left, auto);
+  right:var(--rack-media-right, calc(100% + var(--rack-media-gap, 10px)));
+  height:100%;
+  aspect-ratio:1/1;
+  width:auto;
+  border-radius:18px;
+  border:1px solid rgba(255,220,140,.38);
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255,255,255,.16), transparent 42%),
+    linear-gradient(145deg,hsl(var(--h,30) 62% 36%),rgba(0,0,0,.36));
+  box-shadow:0 12px 28px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.18);
+  display:grid;
+  place-items:center;
+  color:#fff;
+  font-weight:1000;
+  font-size:clamp(1.4rem,3.2vw,2.4rem);
+  letter-spacing:.02em;
+  z-index:14;
+  pointer-events:auto;
+  user-select:none;
+}
+.rackMediaTile img,
+.rackMediaTile video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:inherit;
+  display:block;
+}
+.rackMediaTile span{
+  transform:rotate(calc(-1 * var(--rack-rot, 0deg)));
+  text-shadow:0 2px 8px rgba(0,0,0,.45);
+}
+.rackMediaPhoto{
+  background:rgba(0,0,0,.32);
+}
+.roundLayout .playerRack.seat0{
+  --rack-media-gap:12px;
+}
+.roundLayout .playerRack:not(.seat0){
+  --rack-media-gap:8px;
+}
+.stackedLayout .playerRack{
+  --rack-media-left:auto;
+  --rack-media-right:calc(100% + 10px);
+  --rack-media-gap:10px;
+}
+#game:fullscreen .rackMediaTile{
+  box-shadow:0 14px 34px rgba(0,0,0,.44),0 0 0 1px rgba(255,255,255,.08) inset;
+}
+@media (min-width:1181px) and (max-height:820px){
+  .roundLayout .playerRack:not(.seat0){--rack-media-gap:6px;}
+  .roundLayout .playerRack.seat0{--rack-media-gap:9px;}
+}
+@media (max-width:1180px){
+  .rackMediaTile{
+    height:min(100%,92px);
+    top:0;
+    bottom:auto;
+    right:calc(100% + 8px);
+    left:auto;
+    border-radius:16px;
+    font-size:1.45rem;
+  }
+  .roundLayout .playerRack,
+  .stackedLayout .playerRack{
+    margin-left:86px!important;
+  }
+}
+@media (max-width:760px){
+  .rackMediaTile{
+    height:48px;
+    width:48px;
+    top:50%;
+    transform:translateY(-50%);
+    right:calc(100% + 6px);
+    border-radius:14px;
+    font-size:1rem;
+  }
+  .rackMediaTile span{
+    transform:none;
+  }
+  .roundLayout .playerRack,
+  .stackedLayout .playerRack{
+    margin-left:54px!important;
+  }
+}
+
+/* Word Vault 4.41 tray/media grouping fix only
+   The tray and the square avatar/video-ready tile are now positioned as one
+   seat object, so the combined group stays centered and does not get clipped.
+   Tray/card sizing, board formatting, fullscreen, and gameplay are unchanged. */
+.rackSeatGroup{
+  position:relative;
+  display:flex;
+  align-items:stretch;
+  justify-content:center;
+  gap:var(--rack-media-gap,10px);
+  width:max-content;
+  max-width:none;
+  overflow:visible;
+  z-index:5;
+  pointer-events:auto;
+}
+.roundLayout .rackSeatGroup{
+  position:absolute;
+  left:var(--rack-left,50%);
+  top:var(--rack-top,50%);
+  transform:translate(-50%,-50%) rotate(var(--rack-rot,0deg));
+  transform-origin:center center;
+}
+.roundLayout .rackSeatGroup.seat0{z-index:8;}
+.roundLayout .rackSeatGroup:not(.seat0){z-index:6;}
+.stackedLayout .rackSeatGroup{
+  position:relative!important;
+  left:auto!important;
+  top:auto!important;
+  transform:none!important;
+  margin:0!important;
+}
+.rackSeatGroup > .playerRack,
+.roundLayout .rackSeatGroup > .playerRack,
+.stackedLayout .rackSeatGroup > .playerRack,
+.gameHud:not(.phoneGameHud) .roundLayout .rackSeatGroup > .playerRack{
+  position:relative!important;
+  left:auto!important;
+  top:auto!important;
+  transform:none!important;
+  margin:0!important;
+}
+.rackSeatGroup > .rackMediaTile{
+  position:relative!important;
+  inset:auto!important;
+  left:auto!important;
+  right:auto!important;
+  top:auto!important;
+  bottom:auto!important;
+  align-self:stretch!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  width:auto!important;
+  aspect-ratio:1/1;
+  flex:0 0 auto;
+  order:var(--rack-media-order,-1);
+  transform:none!important;
+}
+.rackSeatGroup > .rackMediaTile span{
+  transform:rotate(calc(-1 * var(--rack-rot,0deg)));
+}
+.roundLayout .rackSeatGroup.seat0{--rack-media-gap:12px;}
+.roundLayout .rackSeatGroup:not(.seat0){--rack-media-gap:8px;}
+.stackedLayout .rackSeatGroup{--rack-media-gap:10px;--rack-media-order:-1;}
+
+@media (min-width:1181px) and (max-height:820px){
+  .roundLayout .rackSeatGroup:not(.seat0){--rack-media-gap:6px;}
+  .roundLayout .rackSeatGroup.seat0{--rack-media-gap:9px;}
+}
+@media (max-width:1180px){
+  .roundLayout .rackSeatGroup,
+  .stackedLayout .rackSeatGroup{
+    position:relative!important;
+    left:auto!important;
+    top:auto!important;
+    transform:none!important;
+    margin:0!important;
+  }
+  .roundLayout .rackSeatGroup > .playerRack,
+  .stackedLayout .rackSeatGroup > .playerRack{
+    margin-left:0!important;
+  }
+  .rackSeatGroup > .rackMediaTile{
+    height:auto!important;
+    width:auto!important;
+    align-self:stretch!important;
+    right:auto!important;
+    left:auto!important;
+    top:auto!important;
+    bottom:auto!important;
+    transform:none!important;
+  }
+}
+@media (max-width:760px){
+  .phoneGameHud .rackSeatGroup,
+  .phoneGameHud .roundLayout .rackSeatGroup,
+  .phoneGameHud .stackedLayout .rackSeatGroup{
+    position:relative!important;
+    left:auto!important;
+    top:auto!important;
+    transform:none!important;
+    width:100%!important;
+    max-width:100%!important;
+    display:flex!important;
+    align-items:stretch!important;
+    justify-content:center!important;
+    gap:6px!important;
+    margin:0!important;
+  }
+  .phoneGameHud .rackSeatGroup > .playerRack,
+  .phoneGameHud .roundLayout .rackSeatGroup > .playerRack,
+  .phoneGameHud .stackedLayout .rackSeatGroup > .playerRack{
+    flex:1 1 auto!important;
+    width:auto!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+  }
+  .phoneGameHud .rackSeatGroup > .rackMediaTile{
+    position:relative!important;
+    width:48px!important;
+    min-width:48px!important;
+    height:auto!important;
+    align-self:stretch!important;
+    transform:none!important;
+    order:-1!important;
+  }
+  .phoneGameHud .rackSeatGroup > .rackMediaTile span{transform:none!important;}
+}
+
+/* Word Vault 4.42 avatar/tray fit + tabletop setup cleanup
+   Fixes only: square media tiles, grouped seat fit, setup text overflow, and bulky tray footer.
+   Does not shrink live tray letter boxes or change game rules. */
+.rackSeatGroup{
+  align-items:center!important;
+  justify-content:center!important;
+  overflow:visible!important;
+}
+.rackSeatGroup > .rackMediaTile{
+  width:var(--rack-media-size,112px)!important;
+  min-width:var(--rack-media-size,112px)!important;
+  max-width:var(--rack-media-size,112px)!important;
+  height:var(--rack-media-size,112px)!important;
+  min-height:var(--rack-media-size,112px)!important;
+  max-height:var(--rack-media-size,112px)!important;
+  aspect-ratio:1/1!important;
+  align-self:center!important;
+  flex:0 0 var(--rack-media-size,112px)!important;
+  overflow:hidden!important;
+}
+.roundLayout .rackSeatGroup:not(.seat0){--rack-media-size:110px;--rack-media-gap:8px;}
+.roundLayout .rackSeatGroup.seat0{--rack-media-size:126px;--rack-media-gap:10px;}
+.stackedLayout .rackSeatGroup{--rack-media-size:112px;--rack-media-gap:10px;}
+
+/* Make trays less clunky vertically without shrinking any card/letter slots. */
+.roundLayout .playerRack,
+.stackedLayout .playerRack{
+  padding-bottom:9px!important;
+}
+.roundLayout .playerRack .rackFooter,
+.stackedLayout .playerRack .rackFooter{
+  position:absolute!important;
+  left:0!important;
+  right:0!important;
+  bottom:4px!important;
+  height:0!important;
+  min-height:0!important;
+  margin:0!important;
+  overflow:visible!important;
+  pointer-events:none!important;
+}
+.roundLayout .playerRack .rackFooter .gemRow,
+.stackedLayout .playerRack .rackFooter .gemRow{
+  display:none!important;
+}
+.roundLayout .playerRack .showOwnLabel,
+.stackedLayout .playerRack .showOwnLabel{
+  position:absolute!important;
+  right:10px!important;
+  bottom:0!important;
+  pointer-events:auto!important;
+  font-size:.66rem!important;
+  line-height:1!important;
+}
+
+/* Non-fullscreen round table gets slightly safer seat footprints with the new square media tile. */
+@media (min-width:1181px){
+  .roundLayout .trayTheater{
+    overflow:hidden!important;
+  }
+  .roundLayout .rackSeatGroup{
+    max-width:calc(100% - 28px)!important;
+  }
+  .roundLayout .rackSeatGroup.seat0{
+    --rack-media-size:122px;
+  }
+  .roundLayout .rackSeatGroup:not(.seat0){
+    --rack-media-size:104px;
+  }
+}
+@media (min-width:1181px) and (max-height:820px){
+  .roundLayout .rackSeatGroup.seat0{--rack-media-size:112px;--rack-media-gap:8px;}
+  .roundLayout .rackSeatGroup:not(.seat0){--rack-media-size:94px;--rack-media-gap:6px;}
+  .stackedLayout .rackSeatGroup{--rack-media-size:98px;--rack-media-gap:8px;}
+}
+
+/* Fullscreen has more board room, so keep the media tiles square and readable. */
+#game:fullscreen .rackSeatGroup > .rackMediaTile{
+  width:var(--rack-media-size,126px)!important;
+  min-width:var(--rack-media-size,126px)!important;
+  max-width:var(--rack-media-size,126px)!important;
+  height:var(--rack-media-size,126px)!important;
+  min-height:var(--rack-media-size,126px)!important;
+  max-height:var(--rack-media-size,126px)!important;
+  aspect-ratio:1/1!important;
+}
+#game:fullscreen .roundLayout .rackSeatGroup.seat0{--rack-media-size:132px;}
+#game:fullscreen .roundLayout .rackSeatGroup:not(.seat0){--rack-media-size:116px;}
+#game:fullscreen .stackedLayout .rackSeatGroup{--rack-media-size:116px;}
+
+/* Phone keeps its compact fixed square tile. */
+@media (max-width:760px){
+  .phoneGameHud .rackSeatGroup > .rackMediaTile{
+    width:48px!important;
+    min-width:48px!important;
+    max-width:48px!important;
+    height:48px!important;
+    min-height:48px!important;
+    max-height:48px!important;
+    aspect-ratio:1/1!important;
+    align-self:center!important;
+    flex:0 0 48px!important;
+  }
+}
+
+/* Pass-the-device / tabletop setup text boxes: prevent column/text overflow. */
+.sharedSetupGrid{
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr))!important;
+  align-items:start!important;
+}
+.sharedPlayerSecret{
+  min-width:0!important;
+  overflow:hidden!important;
+}
+.sharedPlayerSecret input,
+.sharedPlayerSecret .secretForm input{
+  max-width:100%!important;
+  min-width:0!important;
+}
+.sharedPlayerSecret p,
+.sharedPlayerSecret .hint,
+.sharedPlayerSecret label{
+  max-width:100%!important;
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+}
+.sharedPlayerSecret .previewRack{
+  max-width:100%!important;
+  overflow:hidden!important;
+}
+
+/* Word Vault 4.43 optional live camera/microphone tiles only.
+   Uses the existing square media tile space and does not resize trays/cards. */
+.mediaTopBtn.mediaBusy{opacity:.55;pointer-events:none;}
+.rackMediaVideo{background:rgba(0,0,0,.5);position:relative;overflow:hidden;}
+.rackMediaVideo video{position:absolute;inset:0;width:100%!important;height:100%!important;object-fit:cover;border-radius:inherit;background:#090603;z-index:1;}
+.rackMediaVideo .mediaInitialFallback{position:relative;z-index:2;display:grid;place-items:center;width:100%;height:100%;font-size:inherit;}
+.rackMediaVideo video.hasMediaStream + .mediaInitialFallback{display:none!important;}
+.mediaStatusBadge{position:absolute;right:6px;bottom:6px;z-index:4;width:24px;height:24px;border-radius:999px;display:grid;place-items:center;font-size:.72rem;line-height:1;background:rgba(0,0,0,.68);border:1px solid rgba(255,255,255,.24);box-shadow:0 4px 12px rgba(0,0,0,.38);transform:none!important;text-shadow:none!important;}
+.mediaStatusBadge.micOn{color:#bfffd7;border-color:rgba(102,223,157,.55);}
+.mediaStatusBadge.micOff{color:#ffe6a4;border-color:rgba(255,230,164,.42);}
+.rackMediaTile .mediaStatusBadge{pointer-events:none;}
+.cameraAvailableTile .mediaStatusBadge{opacity:.9;}
+@media (max-width:760px){.mediaStatusBadge{right:3px;bottom:3px;width:18px;height:18px;font-size:.58rem;}}
+
+/* Word Vault 4.44 start randomizer + clean focused card overlays only. */
+#effectLayer.effectLayerFocus::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background:rgba(0,0,0,.18);
+  backdrop-filter:blur(1px);
+}
+#effectLayer.effectLayerFocus > *{position:relative;z-index:2;}
+.wv417TurnCardOverlay{z-index:3;}
+.starterSequenceOverlay{
+  position:relative;
+  width:min(92%,520px);
+  min-height:360px;
+  display:grid;
+  place-items:center;
+  pointer-events:none;
+  filter:drop-shadow(0 26px 58px rgba(0,0,0,.48));
+  animation:effectIn .22s ease-out both;
+}
+.starterBeginCard,
+.starterWheelCard{
+  position:absolute;
+  inset:auto;
+  width:min(100%,460px);
+  border-radius:28px;
+  border:1px solid rgba(255,235,170,.52);
+  background:linear-gradient(180deg,rgba(255,239,182,.98),rgba(194,123,38,.98));
+  color:#291608;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 22px 60px rgba(0,0,0,.44);
+  text-align:center;
+}
+.starterBeginCard{
+  padding:38px 26px;
+  display:grid;
+  gap:12px;
+  place-items:center;
+}
+.starterBeginCard .tinyCaps{color:#6b3a12;}
+.starterBeginCard strong{
+  display:block;
+  color:#2a1608;
+  font-size:clamp(2rem,5vw,3.5rem);
+  line-height:.94;
+  font-weight:1000;
+  text-shadow:0 1px 0 rgba(255,255,255,.35);
+}
+.starterWheelCard{
+  opacity:0;
+  transform:translateY(10px) scale(.94);
+  transition:opacity .22s ease,transform .22s ease;
+  padding:24px 20px 22px;
+  display:grid;
+  gap:14px;
+  justify-items:center;
+  background:linear-gradient(180deg,rgba(55,34,22,.98),rgba(22,15,10,.98));
+  color:var(--ink);
+}
+.starterSequenceOverlay.showWheel .starterBeginCard{opacity:0;transform:translateY(-10px) scale(.96);transition:opacity .18s ease,transform .18s ease;}
+.starterSequenceOverlay.showWheel .starterWheelCard{opacity:1;transform:translateY(0) scale(1);}
+.starterPointer{
+  color:var(--gold2);
+  font-size:1.65rem;
+  line-height:1;
+  margin-bottom:-8px;
+  text-shadow:0 2px 8px rgba(0,0,0,.55);
+}
+.starterWheelDisc{
+  position:relative;
+  width:min(74vw,260px);
+  height:min(74vw,260px);
+  border-radius:50%;
+  border:4px solid rgba(255,219,104,.92);
+  background:var(--wheel-bg, conic-gradient(var(--gold),#885020,var(--blue),var(--gold)));
+  overflow:hidden;
+  box-shadow:inset 0 0 0 10px rgba(0,0,0,.12),0 14px 34px rgba(0,0,0,.36),0 0 26px rgba(255,219,104,.24);
+  transform:rotate(0deg);
+}
+.starterWheelDisc.spinNow{
+  transition:transform 5s cubic-bezier(.13,.72,.06,1);
+  transform:rotate(var(--final-rot,2160deg));
+}
+.starterWheelDisc::after{
+  content:"";
+  position:absolute;
+  inset:18%;
+  border-radius:50%;
+  background:rgba(0,0,0,.18);
+  border:1px solid rgba(255,255,255,.22);
+  pointer-events:none;
+}
+.starterWheelHub{
+  position:absolute;
+  left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  width:58px;height:58px;
+  border-radius:50%;
+  display:grid;place-items:center;
+  z-index:4;
+  background:linear-gradient(180deg,var(--gold2),var(--gold));
+  color:#2a1608;
+  font-weight:1000;
+  border:2px solid rgba(255,255,255,.48);
+  box-shadow:0 8px 18px rgba(0,0,0,.34);
+}
+.starterWheelName{
+  position:absolute;
+  left:50%;top:50%;
+  width:38%;
+  transform-origin:left center;
+  transform:rotate(var(--name-rot)) translateX(20%);
+  z-index:3;
+  color:#fff8db;
+  font-size:clamp(.58rem,1.8vw,.78rem);
+  font-weight:1000;
+  text-shadow:0 2px 5px rgba(0,0,0,.75);
+  overflow:visible;
+  white-space:nowrap;
+  text-align:right;
+  pointer-events:none;
+}
+.starterWheelName em{
+  display:inline-block;
+  font-style:normal;
+  max-width:86px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  vertical-align:middle;
+}
+.starterWheelStatus{
+  min-height:34px;
+  display:grid;
+  place-items:center;
+  color:var(--gold2);
+  font-weight:1000;
+  font-size:1.15rem;
+  text-shadow:0 2px 8px rgba(0,0,0,.42);
+}
+.starterSequenceOverlay.starterPicked .starterWheelCard{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 24px 70px rgba(0,0,0,.52),0 0 40px rgba(102,223,157,.26);
+}
+.starterSequenceOverlay.starterPicked .starterWheelStatus{animation:inputPop .42s ease both;color:var(--green);}
+@media (max-width:760px){
+  .starterSequenceOverlay{width:min(94%,360px);min-height:330px;}
+  .starterBeginCard,.starterWheelCard{width:min(100%,340px);border-radius:22px;}
+  .starterBeginCard strong{font-size:2.1rem;}
+  .starterWheelDisc{width:230px;height:230px;}
+  .starterWheelName{font-size:.62rem;width:36%;}
+  .starterWheelName em{max-width:68px;}
+}
+
+/* Word Vault 4.47 rules intro + Random Online notices. Overlay only; no board/tray formatting changes. */
+.rulesIntroOverlay{
+  position:absolute;
+  inset:0;
+  z-index:95;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  pointer-events:auto;
+  background:radial-gradient(circle at 50% 42%,rgba(255,215,107,.18),rgba(10,6,3,.62) 56%,rgba(5,3,2,.78));
+  backdrop-filter:blur(2px);
+}
+.rulesIntroCard{
+  width:min(92%,520px);
+  border:1px solid rgba(255,221,120,.48);
+  border-radius:24px;
+  background:linear-gradient(180deg,rgba(70,42,20,.98),rgba(22,13,7,.98));
+  box-shadow:0 24px 74px rgba(0,0,0,.58),0 0 34px rgba(255,190,76,.14);
+  padding:24px;
+  text-align:left;
+  animation:effectIn .22s ease-out both;
+}
+.rulesIntroTitle{
+  margin:4px 0 10px;
+  color:var(--gold);
+  font-size:clamp(1.65rem,4vw,2.45rem);
+}
+.rulesIntroCard p{color:var(--ink);margin:0 0 12px;}
+.rulesIntroList{
+  display:grid;
+  gap:7px;
+  margin:12px 0 16px;
+  padding-left:22px;
+  color:var(--muted);
+}
+.rulesIntroButton{width:100%;margin-top:4px;}
+.rulesIntroButton:disabled{opacity:.72;cursor:default;}
+.randomOnlineNotice{
+  display:grid;
+  gap:8px;
+  margin-bottom:16px;
+}
+.randomOnlineNotice strong{color:var(--gold2);}
+.randomOnlineNotice span,
+.randomOnlineNotice em{color:var(--muted);font-style:normal;}
+.randomOnlineNotice button{justify-self:start;}
+.themeRevealOverlay{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;background:radial-gradient(circle at 50% 45%,rgba(255,211,106,.18),rgba(0,0,0,.72) 62%);padding:18px;animation:softIn .22s ease both}
+.themeRevealVault{width:min(92vw,440px);border:1px solid rgba(255,214,105,.55);border-radius:22px;background:linear-gradient(180deg,rgba(77,43,22,.96),rgba(30,18,10,.98));box-shadow:0 22px 70px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.12);padding:24px;text-align:center;color:var(--ink);position:relative;overflow:hidden}
+.themeVaultDoor{width:112px;height:112px;margin:0 auto 14px;border-radius:50%;border:7px solid rgba(255,214,105,.8);background:radial-gradient(circle,rgba(255,246,220,.16) 0 24%,rgba(0,0,0,.22) 25% 42%,rgba(255,214,105,.18) 43%);display:grid;place-items:center;transition:transform .9s cubic-bezier(.2,.7,.18,1),filter .9s}
+.themeVaultDoor span{width:52px;height:8px;border-radius:999px;background:rgba(255,246,220,.8);box-shadow:0 0 0 7px rgba(0,0,0,.22)}
+.themeRevealOpen .themeVaultDoor{transform:rotate(92deg) scale(1.04);filter:drop-shadow(0 0 18px rgba(255,214,105,.35))}
+.themeRevealVault h2{margin:4px 0 8px;font-size:clamp(2rem,6vw,3.6rem);line-height:.95;color:var(--gold2)}
+.themeRevealVault p{margin:0;color:var(--muted)}
+@media (max-width:760px){
+  .rulesIntroOverlay{padding:12px;}
+  .rulesIntroCard{width:min(94%,360px);padding:18px;border-radius:20px;}
+  .rulesIntroTitle{font-size:1.65rem;}
+  .rulesIntroCard p,.rulesIntroList{font-size:.9rem;}
+  .rulesIntroList{gap:5px;margin:10px 0 12px;}
+}
+/* Word Vault 4.53 homepage daily spotlight + starter wheel polish.
+   Homepage and overlay-only changes; no tray/letter-box sizing changes. */
+.dailyPuzzleMain{
+  gap:18px;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 88% 12%,rgba(255,230,164,.16),transparent 28%),
+    radial-gradient(circle at 18% 92%,rgba(124,196,255,.1),transparent 32%),
+    linear-gradient(180deg,rgba(86,52,25,.96),rgba(36,20,10,.98))!important;
+}
+.dailyHeroTop{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:18px}
+.dailyHeroTop h2{margin:.15rem 0 .55rem;color:var(--ink);font-size:clamp(2.2rem,4.6vw,4.2rem);line-height:.96}
+.dailyHeroTop p{max-width:540px;font-size:1.15rem}
+.dailyWoltBadge{min-width:132px;border:1px solid var(--line);border-radius:18px;background:rgba(0,0,0,.22);padding:12px;display:grid;justify-items:center;gap:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.dailyWoltBadge .avatar{width:58px;height:58px}
+.dailyWoltBadge span{color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;font-weight:900}
+.dailyWoltBadge strong{color:var(--gold2)}
+.dailyScoreBoard{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.dailyScoreBoard div,.dailyTodayBox,.dailyLeaderboardBox{border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.18);padding:14px}
+.dailyScoreBoard span{display:block;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;font-weight:900}
+.dailyScoreBoard strong{display:block;margin-top:4px;color:var(--gold2);font-size:1.45rem}
+.dailyBoardFooter{display:grid;grid-template-columns:minmax(180px,.78fr) minmax(260px,1.22fr);gap:12px;align-items:stretch;margin-top:auto}
+.dailyTodayBox strong{display:block;color:var(--gold2);font-size:1.25rem;margin:5px 0}
+.dailyTodayBox p{margin:0}
+.dailyLeaderboardBox{min-height:190px}
+.dailyLeaderboardTitle{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;color:var(--gold2);font-weight:1000}
+.dailyLeaderboardTitle strong{color:var(--muted);font-size:.78rem}
+.dailyLeaderboardBox .dailyLeaderboard{margin-top:0}
+.dailyLeaderboardBox .dailyLeaderRow{grid-template-columns:auto 1fr;align-items:center}
+.dailyLeaderboardBox .dailyLeaderRow strong{font-size:.95rem}
+.starterWheelDisc{border-width:5px;background:radial-gradient(circle at 50% 50%,rgba(0,0,0,.18) 0 25%,transparent 26%),var(--wheel-lines,transparent),var(--wheel-bg,conic-gradient(var(--gold),#885020,var(--blue),var(--gold)))!important;box-shadow:inset 0 0 0 9px rgba(255,246,220,.08),inset 0 0 0 20px rgba(0,0,0,.1),0 14px 34px rgba(0,0,0,.36),0 0 26px rgba(255,219,104,.24)}
+.starterWheelDisc::before{content:"";position:absolute;inset:6px;border-radius:50%;border:1px solid rgba(255,246,220,.22);pointer-events:none}
+.starterWheelName{display:none!important}
+.starterWheelSegmentName{position:absolute;left:50%;top:50%;z-index:3;width:var(--label-width,76px);height:28px;margin:-14px 0 0 calc(var(--label-width,76px) / -2);display:grid;place-items:center;transform:rotate(var(--segment-rot)) translateY(-86px) rotate(var(--label-counter));transform-origin:center;pointer-events:none}
+.starterWheelSegmentName em{display:block;width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:normal;text-align:center;padding:4px 7px;border-radius:999px;background:rgba(0,0,0,.46);border:1px solid rgba(255,246,220,.28);color:#fff8db;font-size:clamp(.56rem,1.45vw,.74rem);font-weight:1000;line-height:1.1;text-shadow:0 2px 5px rgba(0,0,0,.75);box-shadow:0 3px 10px rgba(0,0,0,.22)}
+.starterPointer{width:42px;height:34px;display:grid;place-items:center;border-radius:0 0 18px 18px;background:linear-gradient(180deg,var(--gold2),var(--gold));color:#2a1608;font-size:1.25rem;margin-bottom:-12px;z-index:3}
+@media (max-width:760px){
+  .dailyHeroTop{grid-template-columns:1fr}
+  .dailyWoltBadge{grid-template-columns:auto 1fr;justify-items:start;align-items:center;min-width:0}
+  .dailyWoltBadge .avatar{grid-row:1 / span 2}
+  .dailyScoreBoard,.dailyBoardFooter{grid-template-columns:1fr}
+  .dailyHeroTop h2{font-size:2.25rem}
+  .dailyPuzzleMain{padding:18px!important}
+  .starterWheelSegmentName{transform:rotate(var(--segment-rot)) translateY(-74px) rotate(var(--label-counter));height:24px;margin-top:-12px}
+  .starterWheelSegmentName em{font-size:.58rem;padding:3px 5px}
+}
+
+/* Word Vault 4.58 ring lock hardening.
+   The moving blue edge glow may only render on the one rack selected by the
+   visual result lock. This prevents real-turn state from spoiling result cards. */
+.playerRack.activeRack:not(.visualTurnRingRack)::after{
+  display:none!important;
+}
+.playerRack.activeRack:not(.visualTurnRingRack):not(.selectedTargetRack):not(.askedTargetRack){
+  outline:none!important;
+  box-shadow:0 12px 24px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.12)!important;
+}
+.playerRack.visualTurnRingRack::after{
+  display:block!important;
+}
+
+/* Word Vault 4.59 growth/profile controls. Scoped additions only. */
+.accountDialog{max-width:820px}
+.accountCenterHeader{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.18);padding:12px;margin-bottom:12px}
+.accountCenterHeader strong{display:block;color:var(--gold2)}
+.accountCenterHeader span{display:block;color:var(--muted);font-size:.88rem}
+.profileGrowthGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.profileGrowthGrid section,.inviteQrCard,.dailyEventStrip{border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.18);padding:12px}
+.profileGrowthGrid h3{margin:0 0 6px;color:var(--gold2)}
+.miniHistory{margin:0;padding-left:20px;color:var(--muted)}
+.miniHistory li{margin:4px 0}
+.miniHistory strong{color:var(--gold2)}
+.miniHistory span{display:block;font-size:.78rem}
+.inviteQrCard{margin-top:12px;display:flex;align-items:center;gap:12px}
+.inviteQrCard img{width:88px;height:88px;border-radius:10px;background:#fff;padding:5px}
+.inviteQrCard span{color:var(--muted);font-weight:900}
+.dailyScoreBoard{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.dailyEventStrip{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;color:var(--muted)}
+.dailyEventStrip strong{color:var(--gold2)}
+@media (max-width:720px){
+  .profileGrowthGrid{grid-template-columns:1fr}
+  .dailyScoreBoard{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+.themeLobbyNotice,.themeSuggestionBox{display:grid;gap:8px;margin-top:10px}
+.themeLobbyNotice strong,.themeSuggestionBox label{color:var(--gold2)}
+.themeLobbyNotice em{font-style:normal;color:var(--ink)}
+.themeSuggestionList{display:grid;gap:7px}
+.themeVoteOption{text-align:left;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.18);padding:9px;color:var(--ink)}
+.themeVoteOption strong,.themeVoteOption span{display:block}
+.themeVoteOption span{color:var(--muted);font-size:.78rem}
+.themeVoteOption.selectedThemeVote{border-color:rgba(102,223,157,.75);box-shadow:0 0 0 2px rgba(102,223,157,.14)}
+.dailyGameHud .centerBoard{background:radial-gradient(circle at 50% 40%,rgba(102,223,157,.09),transparent 45%),rgba(0,0,0,.04)}
+.dailyGameHud .trayTheater{box-shadow:inset 0 0 80px rgba(102,223,157,.06)}
+.dailyGameHud .cpuSeatGroup{position:relative}
+.dailyGameHud .cpuSeatGroup::before,.dailyGameHud .cpuSeatGroup::after{content:"";position:absolute;top:48%;width:58px;height:28px;border-radius:999px;background:linear-gradient(90deg,rgba(255,221,162,0),rgba(255,221,162,.52));filter:blur(.1px);opacity:.54;pointer-events:none;z-index:0;animation:dailyHandSlide .75s ease both}
+.dailyGameHud .cpuSeatGroup::before{right:calc(100% - 18px);transform:rotate(7deg)}
+.dailyGameHud .cpuSeatGroup::after{left:calc(100% - 18px);transform:scaleX(-1) rotate(7deg)}
+@keyframes dailyHandSlide{from{opacity:0;translate:0 10px}to{opacity:.54;translate:0 0}}
