@@ -821,16 +821,263 @@ const BROAD_THEME_NAMES = [
   'Giant Things','Round Things','Sharp Things','Soft Things','Heavy Things','Fragile Things','Bright Things','Dark Things','Old Things','New Things'
 ];
 
-const THEME_EXAMPLE_BANK = [
-  ['PLANET','ROCKET','ORBIT','LASER','COMET'],
-  ['FOREST','RIVER','FLOWER','STONE','STORM'],
-  ['MUSIC','PIANO','GUITAR','SONG','STAGE'],
-  ['BRIDGE','TOWER','HOUSE','MARKET','HOTEL'],
-  ['PLAYER','TROPHY','RACING','TENNIS','SOCCER'],
-  ['BOOK','SCRIPT','POEM','WRITER','STORY'],
-  ['HAMMER','WRENCH','CABLE','ENGINE','ROBOT'],
-  ['PIZZA','BREAD','CHEESE','SALMON','COOKIE']
-];
+const BROAD_THEME_EXAMPLES = {
+  science: ['ATOM','LASER','ORBIT','FOSSIL','GRAVITY'],
+  technology: ['ROBOT','DEVICE','SCREEN','CIRCUIT','SIGNAL'],
+  nature: ['FOREST','RIVER','STONE','FLOWER','STORM'],
+  space: ['PLANET','ROCKET','COMET','NEBULA','SATURN'],
+  mythology: ['LEGEND','ORACLE','TITAN','TEMPLE','HERO'],
+  history: ['EMPIRE','CASTLE','ANCIENT','SCROLL','MUSEUM'],
+  transportation: ['TRAIN','ROCKET','BICYCLE','HARBOR','FLIGHT'],
+  biology: ['CELL','GENETICS','BRAIN','HEART','OXYGEN'],
+  music: ['PIANO','GUITAR','SONG','RHYTHM','CONCERT'],
+  geography: ['ISLAND','DESERT','VALLEY','CANYON','GLOBE'],
+  literature: ['NOVEL','POETRY','STORY','WRITER','LIBRARY'],
+  architecture: ['BRIDGE','TOWER','PALACE','TEMPLE','WINDOW'],
+  chemistry: ['CARBON','SODIUM','OXYGEN','CRYSTAL','PLASMA'],
+  government: ['VOTE','COURT','LAWYER','LEADER','NATION'],
+  weather: ['STORM','THUNDER','RAINBOW','WIND','FROST'],
+  entertainment: ['STAGE','COMEDY','MOVIE','ACTOR','SCRIPT'],
+  art: ['PAINT','SKETCH','CANVAS','MUSEUM','SCULPTURE'],
+  ocean: ['REEF','TIDE','HARBOR','LAGOON','ISLAND'],
+  mountains: ['SUMMIT','VALLEY','TRAIL','CLIFF','STONE'],
+  cities: ['STREET','MARKET','TOWER','BRIDGE','STATION'],
+  travel: ['VOYAGE','HOTEL','AIRPORT','TICKET','MAP'],
+  education: ['SCHOOL','TEACHER','STUDENT','LESSON','LIBRARY'],
+  medicine: ['DOCTOR','CLINIC','PATIENT','VACCINE','PULSE'],
+  energy: ['SOLAR','SPARK','STEAM','POWER','FUEL'],
+  engineering: ['BRIDGE','ENGINE','DESIGN','MEASURE','MACHINE'],
+  mathematics: ['NUMBER','ANGLE','GRAPH','MATRIX','LOGIC'],
+  language: ['LETTER','GRAMMAR','PHRASE','SYMBOL','POETRY'],
+  writing: ['PENCIL','SCRIPT','JOURNAL','AUTHOR','STORY'],
+  theater: ['STAGE','ACTOR','SCRIPT','DRAMA','CURTAIN'],
+  dance: ['BALLET','RHYTHM','STAGE','MOTION','SPIN'],
+  fashion: ['FABRIC','JACKET','BUTTON','VELVET','DESIGN'],
+  photography: ['CAMERA','LENS','IMAGE','FILTER','FLASH'],
+  film: ['CAMERA','SCRIPT','CINEMA','ACTOR','DIRECTOR'],
+  television: ['SCREEN','SERIES','REMOTE','CHANNEL','COMEDY'],
+  radio: ['AUDIO','SIGNAL','STATION','BROADCAST','SONG'],
+  games: ['PUZZLE','ARCADE','PLAYER','TOKEN','STRATEGY'],
+  puzzles: ['RIDDLE','JIGSAW','LOGIC','PATTERN','SECRET'],
+  mystery: ['SECRET','CLUE','SHADOW','CODE','LOCKER'],
+  adventure: ['QUEST','TRAIL','VOYAGE','TREASURE','ESCAPE'],
+  exploration: ['MAP','COMPASS','VOYAGE','DISCOVERY','TRAIL'],
+  discovery: ['FOSSIL','SIGNAL','PLANET','SECRET','CLUE'],
+  invention: ['ENGINE','DEVICE','ROBOT','DESIGN','PATENT'],
+  industry: ['FACTORY','MACHINE','WORKER','METAL','TOOLS'],
+  farming: ['HARVEST','FIELD','TRACTOR','SEED','BARN'],
+  gardening: ['FLOWER','SEED','GARDEN','SHOVEL','WATER'],
+  cooking: ['KITCHEN','RECIPE','SPICE','OVEN','SAUCE'],
+  baking: ['BREAD','OVEN','FLOUR','COOKIE','PASTRY'],
+  restaurants: ['MENU','TABLE','KITCHEN','WAITER','DINNER'],
+  markets: ['BOOTH','TRADE','PRICE','BASKET','VENDOR'],
+  shopping: ['BAG','STORE','PRICE','COUPON','WALLET'],
+  money: ['DOLLAR','BANK','CREDIT','COIN','WEALTH'],
+  business: ['MARKET','CLIENT','OFFICE','BRAND','BUDGET'],
+  work: ['OFFICE','TASK','WORKER','PROJECT','MEETING'],
+  careers: ['DOCTOR','TEACHER','PILOT','CHEF','BUILDER'],
+  machines: ['ENGINE','ROBOT','GEAR','MOTOR','DEVICE'],
+  robotics: ['ROBOT','SENSOR','MOTOR','CIRCUIT','PROGRAM'],
+  computers: ['SCREEN','KEYBOARD','MEMORY','SERVER','PIXEL'],
+  phones: ['MOBILE','SIGNAL','SCREEN','CAMERA','CALL'],
+  communication: ['SIGNAL','LETTER','MESSAGE','RADIO','PHONE'],
+  social_life: ['PARTY','FRIEND','GROUP','CHAT','VISIT'],
+  family: ['MOTHER','FATHER','SISTER','BROTHER','HOME'],
+  friendship: ['FRIEND','TRUST','LOYALTY','PARTNER','SHARE'],
+  school: ['STUDENT','TEACHER','PENCIL','LESSON','LOCKER'],
+  college: ['CAMPUS','LECTURE','LIBRARY','DEGREE','CLASS'],
+  books: ['NOVEL','READER','STORY','AUTHOR','LIBRARY'],
+  libraries: ['BOOK','SHELF','READER','ARCHIVE','STUDY'],
+  museums: ['EXHIBIT','GALLERY','FOSSIL','PAINTING','HISTORY'],
+  parks: ['TRAIL','BENCH','FIELD','GARDEN','PICNIC'],
+  forests: ['TREE','MOSS','TRAIL','CEDAR','SHADE'],
+  deserts: ['SAND','CACTUS','OASIS','DUNE','SUNSET'],
+  rivers: ['CURRENT','BANK','BRIDGE','WATER','CREEK'],
+  lakes: ['SHORE','DOCK','WATER','BOAT','ISLAND'],
+  islands: ['SHORE','PALM','LAGOON','BEACH','HARBOR'],
+  beaches: ['SAND','SHELL','TIDE','SURF','SUNSET'],
+  caves: ['STONE','SHADOW','ECHO','TUNNEL','CRYSTAL'],
+  volcanoes: ['LAVA','ASHES','CRATER','MAGMA','ERUPT'],
+  earth: ['STONE','SOIL','GLOBE','MINERAL','GROUND'],
+  climate: ['WEATHER','SEASON','WARMTH','STORM','CHANGE'],
+  seasons: ['WINTER','SPRING','SUMMER','AUTUMN','FROST'],
+  winter: ['FROST','SNOW','ICEBERG','SCARF','SKATING'],
+  spring: ['BLOOM','FLOWER','RAIN','GREEN','GARDEN'],
+  summer: ['SUNSET','PICNIC','BEACH','HEAT','POOL'],
+  autumn: ['HARVEST','LEAF','FROST','APPLE','EMBER'],
+  holidays: ['PARADE','GIFT','CANDLE','FESTIVAL','TRADITION'],
+  festivals: ['PARADE','MUSIC','STAGE','CROWD','LANTERN'],
+  celebrations: ['PARTY','GIFT','TOAST','PARADE','MUSIC'],
+  traditions: ['CUSTOM','FAMILY','RITUAL','HOLIDAY','HERITAGE'],
+  future: ['ROBOT','ROCKET','NEON','DEVICE','VISION'],
+  time: ['CLOCK','MOMENT','DECADE','HISTORY','FUTURE'],
+  memory: ['RECALL','PHOTO','STORY','MOMENT','ALBUM'],
+  dreams: ['SLEEP','VISION','NIGHT','IMAGE','WISH'],
+  emotions: ['JOY','ANGER','FEAR','PRIDE','TRUST'],
+  senses: ['SOUND','LIGHT','TOUCH','TASTE','VISION'],
+  color: ['VIOLET','YELLOW','GREEN','AMBER','SILVER'],
+  light: ['LASER','SHADOW','SUNSET','BEACON','GLOW'],
+  sound: ['AUDIO','ECHO','RHYTHM','THUNDER','SIGNAL'],
+  motion: ['SPEED','DRIFT','SPIN','FLIGHT','SLIDER'],
+  speed: ['RACING','QUICK','ROCKET','SPRINT','TURBO'],
+  strength: ['POWER','FORCE','MUSCLE','STEEL','GRIP'],
+  balance: ['LEVEL','SCALE','CENTER','MOTION','GRACE'],
+  shape: ['CIRCLE','SQUARE','ANGLE','CURVE','PATTERN'],
+  patterns: ['STRIPE','MATRIX','RHYTHM','DESIGN','REPEAT'],
+  numbers: ['COUNT','DIGIT','SCORE','MATRIX','INDEX'],
+  maps: ['COMPASS','REGION','ROUTE','GLOBE','TRAIL'],
+  navigation: ['COMPASS','SIGNAL','ROUTE','HARBOR','MAP'],
+  survival: ['SHELTER','WATER','FIRE','SIGNAL','RESCUE'],
+  safety: ['SHIELD','ALARM','RESCUE','HELMET','WARNING'],
+  health: ['HEART','SLEEP','FITNESS','CLINIC','NUTRITION'],
+  fitness: ['RUNNING','STRETCH','MUSCLE','ENERGY','TRACK'],
+  outdoors: ['TRAIL','CAMPING','FOREST','RIVER','SKY'],
+  camping: ['TENT','FIRE','TRAIL','LANTERN','SHELTER'],
+  hiking: ['TRAIL','SUMMIT','BACKPACK','COMPASS','BOOTS'],
+  boating: ['HARBOR','SAIL','ANCHOR','WATER','DECK'],
+  aviation: ['PILOT','FLIGHT','AIRPORT','WING','ROCKET'],
+  railways: ['TRAIN','TRACK','STATION','TUNNEL','SIGNAL'],
+  roads: ['STREET','BRIDGE','TRAFFIC','ROUTE','DRIVER'],
+  vehicles: ['ENGINE','WHEEL','BICYCLE','TRUCK','TRAIN'],
+  buildings: ['TOWER','WINDOW','BRIDGE','OFFICE','ROOM'],
+  bridges: ['ARCH','RIVER','STEEL','TOWER','SPAN'],
+  towers: ['HEIGHT','BEACON','CASTLE','SIGNAL','ROOF'],
+  homes: ['HOUSE','KITCHEN','WINDOW','ROOM','FAMILY'],
+  furniture: ['CHAIR','TABLE','SHELF','BED','DRAWER'],
+  kitchen: ['OVEN','FORK','PLATE','KETTLE','SPICE'],
+  bathroom: ['TOWEL','SINK','MIRROR','SOAP','FAUCET'],
+  office: ['DESK','PAPER','SCREEN','MEETING','FOLDER'],
+  workshop: ['HAMMER','WRENCH','DRILL','CLAMP','SAW'],
+  clothing: ['JACKET','SHOE','BUTTON','FABRIC','SLEEVE'],
+  jewelry: ['RING','JEWEL','SILVER','GOLDEN','DIAMOND'],
+  toys: ['BLOCK','PUZZLE','DOLL','ROBOT','GAME'],
+  plants: ['FLOWER','SEED','LEAF','ROOT','GARDEN'],
+  trees: ['CEDAR','BRANCH','LEAF','TIMBER','FOREST'],
+  flowers: ['PETAL','BLOOM','VIOLET','GARDEN','STEM'],
+  seeds: ['GRAIN','SPROUT','HARVEST','SOIL','PLANT'],
+  fruit: ['APPLE','BANANA','GRAPE','PEACH','ORANGE'],
+  vegetables: ['CARROT','PEPPER','TOMATO','ONION','POTATO'],
+  desserts: ['COOKIE','BROWNIE','CAKE','CANDY','CREAM'],
+  drinks: ['COFFEE','JUICE','WATER','TEA','SODA'],
+  breakfast: ['TOAST','CEREAL','WAFFLE','OMELET','BACON'],
+  dinner: ['PASTA','SALAD','SOUP','PLATE','SAUCE'],
+  snacks: ['CHIPS','COOKIE','NUTS','POPCORN','FRUIT'],
+  spices: ['GINGER','GARLIC','PEPPER','CINNAMON','HERB'],
+  performance: ['STAGE','ACTOR','DANCE','SONG','APPLAUSE'],
+  stage: ['CURTAIN','ACTOR','SCRIPT','LIGHT','SCENE'],
+  concerts: ['MUSIC','GUITAR','PIANO','STAGE','SINGER'],
+  instruments: ['PIANO','GUITAR','DRUM','VIOLIN','HORN'],
+  songs: ['LYRIC','MELODY','RHYTHM','CHORUS','SINGER'],
+  genres: ['COMEDY','DRAMA','JAZZ','HORROR','ACTION'],
+  artists: ['PAINTER','SINGER','WRITER','MAKER','DESIGN'],
+  stories: ['HERO','VILLAIN','QUEST','MYSTERY','ENDING'],
+  heroes: ['BRAVE','RESCUE','SHIELD','LEGEND','HONOR'],
+  villains: ['SHADOW','TRAP','DANGER','SCHEME','RIVAL'],
+  magic: ['SPELL','WIZARD','CHARM','ORACLE','MYSTERY'],
+  fantasy: ['CASTLE','WIZARD','QUEST','DRAGON','KINGDOM'],
+  science_fiction: ['ROBOT','GALAXY','PORTAL','LASER','NEBULA'],
+  superheroes: ['MASK','SHIELD','POWER','RESCUE','SECRET'],
+  crime: ['CLUE','COURT','POLICE','LOCK','MYSTERY'],
+  comedy: ['JOKE','STAGE','LAUGH','SCRIPT','TIMING'],
+  drama: ['ACTOR','SCENE','SCRIPT','TENSION','STAGE'],
+  animation: ['FRAME','PIXEL','CHARACTER','MOTION','COLOR'],
+  documentaries: ['CAMERA','FACT','HISTORY','NATURE','STORY'],
+  news: ['REPORT','ANCHOR','HEADLINE','STORY','PRESS'],
+  journalism: ['REPORT','ARTICLE','EDITOR','SOURCE','PRESS'],
+  politics: ['VOTE','LAW','LEADER','DEBATE','NATION'],
+  law: ['COURT','JUDGE','LAWYER','VERDICT','RULE'],
+  courts: ['JUDGE','TRIAL','JURY','LAWYER','VERDICT'],
+  military: ['BASE','RANK','MISSION','SHIELD','SIGNAL'],
+  brain: ['MEMORY','NERVE','THOUGHT','LOGIC','DREAM'],
+  heart: ['PULSE','CARDIO','HEALTH','BEAT','CARE'],
+  genetics: ['DNA','TRAIT','CELL','FAMILY','CODE'],
+  evolution: ['FOSSIL','ADAPT','CHANGE','SPECIES','TIME'],
+  conservation: ['RECYCLE','FOREST','WATER','PROTECT','NATURE'],
+  recycling: ['PAPER','PLASTIC','GLASS','REUSE','SORT'],
+  pollution: ['SMOKE','WASTE','WATER','CLEAN','AIR'],
+  astronomy: ['PLANET','STAR','ORBIT','GALAXY','COMET'],
+  planets: ['SATURN','MARS','ORBIT','PLANET','SOLAR'],
+  stars: ['SOLAR','NEBULA','GALAXY','COMET','LIGHT'],
+  galaxies: ['NEBULA','ORBIT','COSMOS','STAR','SPIRAL'],
+  rockets: ['LAUNCH','ORBIT','ENGINE','BOOSTER','FLIGHT'],
+  satellites: ['ORBIT','SIGNAL','SOLAR','RADIO','TRACK'],
+  laboratories: ['TEST','BEAKER','LASER','SAMPLE','MICRO'],
+  experiments: ['TEST','RESULT','SAMPLE','THEORY','LAB'],
+  minerals: ['QUARTZ','CRYSTAL','STONE','METAL','ORE'],
+  metals: ['STEEL','COPPER','SILVER','IRON','NICKEL'],
+  electricity: ['SPARK','CIRCUIT','POWER','VOLTAGE','WIRE'],
+  magnetism: ['MAGNET','POLE','FORCE','FIELD','METAL'],
+  forces: ['GRAVITY','MOTION','PUSH','PULL','ENERGY'],
+  materials: ['WOOD','STONE','GLASS','PAPER','FABRIC'],
+  textiles: ['FABRIC','COTTON','VELVET','THREAD','WEAVE'],
+  wood: ['TIMBER','CEDAR','LUMBER','GRAIN','CARVE'],
+  stone: ['MARBLE','QUARTZ','GRANITE','CRYSTAL','ROCK'],
+  glass: ['WINDOW','MIRROR','BOTTLE','CRYSTAL','CLEAR'],
+  plastic: ['BOTTLE','MOLD','PANEL','LIGHT','REUSE'],
+  paper: ['BOOK','LETTER','PRINT','FOLDER','PAGE'],
+  printing: ['PAPER','INK','PRESS','TYPE','POSTER'],
+  design: ['SHAPE','COLOR','PATTERN','MODEL','PLAN'],
+  crafts: ['GLUE','PAPER','THREAD','PAINT','MAKER'],
+  painting: ['CANVAS','BRUSH','COLOR','GALLERY','MURAL'],
+  sculpture: ['STONE','MARBLE','BRONZE','FORM','CARVE'],
+  drawing: ['PENCIL','SKETCH','LINE','SHADE','PAPER'],
+  ceramics: ['CLAY','KILN','VASE','GLAZE','BOWL'],
+  night: ['MOON','SHADOW','DREAM','STARS','QUIET'],
+  morning: ['SUNRISE','COFFEE','ALARM','BREAKFAST','LIGHT'],
+  storms: ['THUNDER','RAIN','WIND','LIGHTNING','CLOUD'],
+  sunshine: ['SOLAR','LIGHT','WARMTH','YELLOW','BEAM'],
+  rain: ['CLOUD','STORM','WATER','PUDDLE','UMBRELLA'],
+  snow: ['FROST','WINTER','ICE','FLAKE','WHITE'],
+  wind: ['BREEZE','STORM','SAIL','AIR','GUST'],
+  fire: ['FLAME','EMBER','SMOKE','HEAT','TORCH'],
+  water: ['RIVER','OCEAN','RAIN','LAKE','FLOW'],
+  ice: ['FROST','WINTER','GLACIER','COLD','CRYSTAL'],
+  destruction: ['CRASH','DAMAGE','RUIN','FIRE','STORM'],
+  creation: ['BUILD','DESIGN','CRAFT','IDEA','MAKER'],
+  repair: ['FIX','TOOL','PATCH','WRENCH','RESTORE'],
+  building: ['BRIDGE','TOWER','FRAME','ROOF','FOUNDATION'],
+  hidden_things: ['SECRET','LOCK','SHADOW','CLUE','VAULT'],
+  secrets: ['CODE','LOCK','WHISPER','CLUE','VAULT'],
+  codes: ['SIGNAL','SYMBOL','CIPHER','LOCK','PATTERN'],
+  signals: ['RADIO','BEACON','ALARM','MESSAGE','LIGHT'],
+  symbols: ['ICON','SIGN','MARK','LETTER','CODE'],
+  riddles: ['CLUE','LOGIC','ANSWER','MYSTERY','PUZZLE'],
+  luck: ['CHANCE','RISK','PRIZE','DRAW','FORTUNE'],
+  strategy: ['PLAN','RISK','MOVE','TARGET','TACTIC'],
+  risk: ['DANGER','CHANCE','WAGER','WARNING','REWARD'],
+  treasure: ['GOLD','CHEST','MAP','VAULT','JEWEL'],
+  trade: ['MARKET','PRICE','BARTER','GOODS','ROUTE'],
+  voyages: ['SHIP','MAP','HARBOR','ISLAND','TRAIL'],
+  royalty: ['CROWN','PALACE','QUEEN','KING','THRONE'],
+  philosophy: ['IDEA','LOGIC','BELIEF','REASON','TRUTH'],
+  ideas: ['THOUGHT','PLAN','VISION','SPARK','DESIGN'],
+  beliefs: ['TRUST','FAITH','CUSTOM','IDEA','VALUE'],
+  customs: ['TRADITION','RITUAL','FAMILY','CULTURE','HOLIDAY'],
+  comics: ['PANEL','HERO','INK','STORY','ISSUE'],
+  magazines: ['ARTICLE','PHOTO','COVER','EDITOR','PAGE'],
+  newspapers: ['HEADLINE','REPORT','COLUMN','PRESS','PRINT'],
+  advertising: ['BRAND','LOGO','SLOGAN','POSTER','MARKET'],
+  brands: ['LOGO','LABEL','MARKET','STYLE','PACKAGE'],
+  logos: ['SYMBOL','BRAND','ICON','MARK','DESIGN'],
+  packages: ['BOX','LABEL','WRAP','BOTTLE','BAG'],
+  collections: ['ALBUM','SHELF','ARCHIVE','SET','DISPLAY'],
+  hobbies: ['CRAFT','GAME','MUSIC','GARDEN','PUZZLE'],
+  diy: ['TOOLS','PAINT','REPAIR','BUILD','PROJECT'],
+  repairs: ['WRENCH','PATCH','FIX','SCREW','TOOL'],
+  cleaning: ['SOAP','BRUSH','WATER','TOWEL','SHINE'],
+  storage: ['BOX','SHELF','LOCKER','BAG','DRAWER'],
+  organization: ['LABEL','FOLDER','SHELF','SYSTEM','ORDER'],
+  measurement: ['SCALE','RULER','ANGLE','COUNT','LEVEL'],
+  electronics: ['SCREEN','CIRCUIT','BATTERY','DEVICE','SIGNAL'],
+  appliances: ['OVEN','FRIDGE','WASHER','TOASTER','MIXER'],
+  cameras: ['LENS','PHOTO','FLASH','IMAGE','FILTER'],
+  audio: ['SOUND','SPEAKER','RADIO','TRACK','VOLUME'],
+  video: ['SCREEN','CAMERA','CLIP','FRAME','STREAM'],
+  streaming: ['VIDEO','CHANNEL','SCREEN','LIVE','AUDIO'],
+  memes: ['JOKE','IMAGE','TREND','SHARE','CAPTION'],
+  challenges: ['RISK','SCORE','TARGET','TIMER','REWARD'],
+  trends: ['STYLE','POPULAR','SHARE','MOMENT','CULTURE']
+};
 
 function themeIdFromName(name) {
   return String(name || 'theme').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'theme';
@@ -839,8 +1086,10 @@ function themeIdFromName(name) {
 function makeBroadTheme(name, index) {
   const id = themeIdFromName(name);
   const wordsFromName = String(name || '').toUpperCase().replace(/&/g, ' ').split(/[^A-Z]+/).filter(w => w.length >= 3 && w.length <= 12);
-  const bank = THEME_EXAMPLE_BANK[index % THEME_EXAMPLE_BANK.length];
-  return { id, name, emoji: '*', examples: [...new Set([...wordsFromName, ...bank])].slice(0, 5), words: [] };
+  const exact = BROAD_THEME_EXAMPLES[id] || [];
+  const parent = id.includes('_and_') ? BROAD_THEME_EXAMPLES[id.split('_and_')[0]] || [] : [];
+  const examples = [...new Set([...exact, ...parent, ...wordsFromName])].filter(w => /^[A-Z]{3,12}$/.test(w)).slice(0, 5);
+  return { id, name, emoji: '*', examples, words: [] };
 }
 
 const CORE_THEME_IDS = new Set(CORE_THEMES.map(t => t.id));
@@ -2727,8 +2976,12 @@ function guessFullInternal(room, guesser, target, guess, interruptive) {
   }
   const raw = String(guess || '').trim().toUpperCase();
   if (!raw) return { ok: false, message: 'Enter a full word or full tray pattern.' };
-  if (room.dailyPuzzle && !guesser.isCpu && !guesser.isLocal) room.dailyGuessCount = (room.dailyGuessCount || 0) + 1;
   const normalizedFull = raw.replace(/DOT/g, '.').replace(/[^A-Z.]/g, '');
+  const guessedWord = normalizedFull.replace(/[^A-Z]/g, '');
+  if (!guesser.isCpu && !guesser.isLocal && competitiveDictionaryRequired(room) && !COMPETITIVE_DICTIONARY.has(guessedWord)) {
+    return { ok: false, message: 'please use a valid word' };
+  }
+  if (room.dailyPuzzle && !guesser.isCpu && !guesser.isLocal) room.dailyGuessCount = (room.dailyGuessCount || 0) + 1;
   const fullPattern = target.slots.map(s => slotHasCard(s) ? s.ch : '').join('');
   const wordOnly = target.word;
   const correct = normalizedFull === fullPattern || normalizedFull === wordOnly;
@@ -2852,13 +3105,11 @@ io.on('connection', (socket) => {
     room.settings.aiEnabled = false;
     room.status = 'playing';
     room.turnIndex = 0;
-    room.rulesIntroPending = false;
-    room.rulesIntroAcknowledged = true;
+    room.rulesIntroPending = true;
+    room.rulesIntroAcknowledged = false;
     room.startingIntro = false;
-    room.dailyStartedAt = Date.now();
     addLog(room, `Daily Puzzle ${puzzle.key}: ${puzzle.clue}.`);
     addLog(room, 'Daily Puzzle mode: solve Wolt\'s word. Your tray is not in play.');
-    startTurn(room, true);
     socket.join(room.code);
     socket.emit('joined', { code: room.code, playerId: room.players[0].id, token: safeToken, dailyPuzzle: true });
     broadcast(room);
@@ -3183,6 +3434,20 @@ io.on('connection', (socket) => {
     if (!room || room.status !== 'playing' || !room.rulesIntroPending) return;
     const self = socketPlayer(room, socket);
     if (!self || room.hostId !== self.id) return emitError(socket, 'Waiting for the host to continue.');
+    if (room.dailyPuzzle) {
+      room.rulesIntroPending = false;
+      room.rulesIntroAcknowledged = true;
+      room.startingIntro = false;
+      room.turnEndsAt = null;
+      room.currentCard = null;
+      room.awaitingExpose = null;
+      room.dailyStartedAt = room.dailyStartedAt || Date.now();
+      addLog(room, 'Daily rules confirmed. The stopwatch has started.');
+      addEffect(room, 'daily-start', 'Daily Puzzle begins. Solve Wolt\'s vault.', { actorId: self.id, targetId: room.players.find(p => p.isCpu)?.id || '' });
+      startTurn(room, true);
+      broadcast(room);
+      return;
+    }
     beginStarterIntro(room);
     broadcast(room);
   });

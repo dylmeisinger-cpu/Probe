@@ -1,7 +1,7 @@
 {
   "name": "multiplayer-hidden-word-card-game",
-  "version": "1.4.62",
-  "description": "Word Vault expanded themes, daily solve-only puzzle flow, private theme selection, and 1v1 challenge mode.",
+  "version": "1.4.64",
+  "description": "Word Vault competitive dictionary rebuilt from Wiktionary-verified game words.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
